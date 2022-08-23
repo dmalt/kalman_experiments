@@ -81,7 +81,7 @@ def plv(x1, x2, ma_len_samp):
     prod = np.conj(x1) * x2
 
     ma_kernel = np.ones(ma_len_samp) / ma_len_samp
-    return np.convolve(prod, ma_kernel, mode='same'), prod[:len(prod)//2].mean()
+    return np.convolve(prod, ma_kernel, mode="same"), prod[: len(prod) // 2].mean()
 
 
 def env_cor(x1, x2, ma_len_samp):
@@ -94,7 +94,8 @@ def env_cor(x1, x2, ma_len_samp):
     prod = x1 * x2
 
     ma_kernel = np.ones(ma_len_samp) / ma_len_samp
-    return np.convolve(prod, ma_kernel, mode='same'), prod.mean()
+    return np.convolve(prod, ma_kernel, mode="same"), prod.mean()
+
 
 if __name__ == "__main__":
     from gen_ar_noise import ArNoise
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         n_x=2,
         n_z=1,
         Phi=complex2mat(model.Phi),
-        Q=np.eye(N=2) * sigma_data ** 2,
+        Q=np.eye(N=2) * sigma_data**2,
         H=np.array([1, 0])[np.newaxis, :],
         # Psi=np.array([meas_noise.a[0]])[:, np.newaxis],
         Psi=np.array([-0.5])[:, np.newaxis],
@@ -127,7 +128,7 @@ if __name__ == "__main__":
         y = model.step()
         gt_states.append(model.x)
         meas.append(y)
-        kf_states.append(vec2complex(kf.update(y)[1][:,0]))
+        kf_states.append(vec2complex(kf.update(y)[1][:, 0]))
     for i in range(1000):
         y = model.step()
         gt_states.append(model.x)
@@ -153,7 +154,7 @@ if __name__ == "__main__":
     ax1.plot(t, np.real(cfir_states[:lim]))
     ax1.plot(t, np.real(kf_states[:lim]))
     ax1.plot(t, meas[:lim], alpha=0.3)
-    ax1.plot(t, np.real(gt_states[:lim]), '--')
+    ax1.plot(t, np.real(gt_states[:lim]), "--")
     ax1.legend(["cfir state (Re)", "kalman state (Re)", "measurements", "ground truth state (Re)"])
     ax1.grid()
 
