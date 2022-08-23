@@ -41,7 +41,7 @@ class ArNoise:
 
 
 if __name__ == "__main__":
-    o = 50
+    o = 1
     alpha = 1
     # an = ArNoise(np.array([0] * o), alpha=1, order=o, sigma=199)
     y0 = np.random.rand(o)
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     print(an.a)
     import matplotlib.pyplot as plt
     from scipy.signal import welch
-    freqs, psd = welch(res, fs=500, nperseg=1024)
+    freqs, psd = welch(res, fs=125, nperseg=1024)
     plt.plot(freqs[1:-1], psd[1:-1])
     plt.plot(freqs[1:-1], [1 / f ** alpha for f in freqs[1:-1]])
     plt.yscale("log")
