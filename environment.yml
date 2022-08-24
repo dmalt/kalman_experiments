@@ -13,5 +13,3 @@ dependencies:
   - mne-base
   - datalad
   - jupyter
-  - pytest
-  - hypothesis
