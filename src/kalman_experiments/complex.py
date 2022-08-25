@@ -1,13 +1,10 @@
 """Complex numbers manipulation utilities"""
 
 import random
-from typing import Any
 
 import numpy as np
-import numpy.typing as npt
 
-Vec2 = npt.NDArray[np.floating[Any]]  # array of shape(2, 1)
-Mat2 = npt.NDArray[np.floating[Any]]  # array of shape(2, 2)
+from .numpy_types import Mat2, Vec2
 
 
 def complex_randn() -> complex:

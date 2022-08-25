@@ -1,14 +1,10 @@
 from cmath import exp
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
-import numpy.typing as npt
 
 from .complex import complex2mat
-
-Cov = npt.NDArray[np.floating[Any]]  # of shape(n, n)
-Vec = npt.NDArray[np.floating[Any]]  # of shape(n, 1)
-Mat = npt.NDArray[np.floating[Any]]  # of shape(n, m)
+from .numpy_types import Cov, Mat, Vec
 
 
 class ColoredNoiseKF:

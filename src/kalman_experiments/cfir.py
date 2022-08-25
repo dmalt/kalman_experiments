@@ -1,10 +1,7 @@
-from typing import Any
-
 import numpy as np
-import numpy.typing as npt
 import scipy.signal as sg
 
-Arr1D = npt.NDArray[np.floating[Any]]  # of shape(n,)
+from .numpy_types import Vec1D
 
 
 class CFIRBandDetector:
@@ -35,7 +32,7 @@ class CFIRBandDetector:
         delay: int,
         n_taps: int = 500,
         n_fft: int = 2000,
-        weights: Arr1D | None = None,
+        weights: Vec1D | None = None,
     ):
         w = np.arange(n_fft)
         H = 2 * np.exp(-2j * np.pi * w / n_fft * delay)
@@ -51,6 +48,6 @@ class CFIRBandDetector:
         self.a = np.array([1.0])
         self.zi = np.zeros(len(self.b) - 1)
 
-    def apply(self, signal: Arr1D) -> Arr1D:
+    def apply(self, signal: Vec1D) -> Vec1D:
         y, self.zi = sg.lfilter(self.b, self.a, signal, zi=self.zi)
         return y
