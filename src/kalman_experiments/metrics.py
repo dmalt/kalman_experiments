@@ -20,4 +20,4 @@ def env_cor(x1, x2, ma_len_samp):
     prod = x1 * x2
 
     ma_kernel = np.ones(ma_len_samp) / ma_len_samp
-    return np.convolve(prod, ma_kernel, mode="same"), prod.mean()
+    return np.convolve(prod, ma_kernel, mode="same"), prod[: len(prod) // 2].mean()
