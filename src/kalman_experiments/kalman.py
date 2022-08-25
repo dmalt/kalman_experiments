@@ -3,8 +3,8 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .complex import complex2mat
-from .numpy_types import Cov, Mat, Vec
+from .complex import complex2mat, vec2complex
+from .numpy_types import Cov, Mat, Vec, Vec1D
 
 
 class ColoredNoiseKF:
@@ -50,9 +50,9 @@ class ColoredNoiseKF:
 
         self.y_prev = np.zeros((n_z, 1))
 
-    def predict(self) -> tuple[Vec, Cov]:
-        x_ = self.Phi @ self.x  # eq. (26) from [1]
-        P_ = self.Phi @ self.P @ self.Phi.T + self.Q  # eq. (27) from [1]
+    def predict(self, x: Vec, P: Cov) -> tuple[Vec, Cov]:
+        x_ = self.Phi @ x  # eq. (26) from [1]
+        P_ = self.Phi @ P @ self.Phi.T + self.Q  # eq. (27) from [1]
         return x_, P_
 
     def update(self, y: Vec, x_: Vec, P_: Cov) -> tuple[Vec, Cov]:
@@ -79,7 +79,7 @@ class ColoredNoiseKF:
         return x_, P_
 
     def step(self, y: Vec | None) -> tuple[Vec, Cov]:
-        x_, P_ = self.predict()
+        x_, P_ = self.predict(self.x, self.P)
         return self.update(y, x_, P_) if y is not None else self.update_no_meas(x_, P_)
 
 
@@ -135,8 +135,8 @@ class Colored1DMatsudaKF:
         R = np.array([[r_sigma**2]])
         self.KF = ColoredNoiseKF(n_x=2, n_z=1, Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
-    def predict(self) -> Gaussian:
-        return Gaussian(*self.KF.predict())
+    def predict(self, X: Gaussian) -> Gaussian:
+        return Gaussian(*self.KF.predict(X.mu, X.Sigma))
 
     def update(self, y: float, X_: Gaussian) -> Gaussian:
         y_arr = np.array([[y]])
@@ -147,5 +147,21 @@ class Colored1DMatsudaKF:
         return Gaussian(*self.KF.update_no_meas(x_=X_.mu, P_=X_.Sigma))
 
     def step(self, y: float | None) -> Gaussian:
-        X_ = self.predict()
+        X_ = self.predict(Gaussian(self.KF.x, self.KF.P))
         return self.update_no_meas(X_) if y is None else self.update(y, X_)
+
+
+class KFAdapter:
+    def __init__(self, kf: Colored1DMatsudaKF):
+        self.kf = kf
+
+    def apply(self, signal: Vec1D, delay: int) -> Vec1D:
+        if delay > 0:
+            raise NotImplementedError("Kalman smoothing is not implemented")
+        res = []
+        for y in signal:
+            state = self.kf.step(y)
+            for _ in range(abs(delay)):
+                state = self.kf.predict(state)
+            res.append(vec2complex(state.mu))
+        return np.array(res)

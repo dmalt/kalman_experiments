@@ -1,3 +1,5 @@
+from dataclasses import asdict, dataclass
+
 import numpy as np
 import scipy.signal as sg
 
@@ -50,4 +52,19 @@ class CFIRBandDetector:
 
     def apply(self, signal: Vec1D) -> Vec1D:
         y, self.zi = sg.lfilter(self.b, self.a, signal, zi=self.zi)
+        return y
+
+
+@dataclass
+class CFIRAdapter:
+    band: tuple[float, float]
+    sr: float
+    n_taps: int = 500
+    n_fft: int = 2000
+    weights: Vec1D | None = None
+
+    def apply(self, signal: Vec1D, delay: int) -> Vec1D:
+        cfir_params = asdict(self) | {"delay": delay}
+        cfir = CFIRBandDetector(**cfir_params)
+        y, cfir.zi = sg.lfilter(cfir.b, cfir.a, signal, zi=cfir.zi)
         return y
