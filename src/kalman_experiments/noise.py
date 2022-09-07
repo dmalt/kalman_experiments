@@ -1,6 +1,30 @@
 import numpy as np
 from mne.io import read_raw_brainvision
 
+from kalman_experiments.numpy_types import Vec
+
+
+def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
+    """
+    Parameters
+    ----------
+    order : int
+        Order of the AR model
+    alpha : float in range [-2, 2]
+        Alpha as in '1/f^alpha'
+
+    References
+    ----------
+    .. [1] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
+    Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings
+    of the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
+
+    """
+    a: list[float] = [1]
+    for k in range(1, order + 1):
+        a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1]
+    return -np.array(a[1:])
+
 
 class ArNoise:
     """
@@ -27,16 +51,13 @@ class ArNoise:
 
     def __init__(self, x0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
         assert (len(x0) == order), f"x0 length must match AR order; got {len(x0)=}, {order=}"
-        a: list[float] = [1]
-        for k in range(1, order + 1):
-            a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1]
-        self.a = np.array(a[1:])
+        self.a = gen_ar_noise_coefficients(alpha, order)
         self.x = x0
         self.s = s
 
     def step(self) -> float:
         """Make one step of the AR process"""
-        y_next = - self.a @ self.x + np.random.randn() * self.s
+        y_next = self.a @ self.x + np.random.randn() * self.s
         self.x = np.concatenate([[y_next], self.x[:-1]])  # type: ignore
         return float(y_next)
 
