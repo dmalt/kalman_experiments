@@ -66,5 +66,5 @@ class CFIRAdapter:
     def apply(self, signal: Vec1D, delay: int) -> Vec1D:
         cfir_params = asdict(self) | {"delay": delay}
         cfir = CFIRBandDetector(**cfir_params)
-        y, cfir.zi = sg.lfilter(cfir.b, cfir.a, signal, zi=cfir.zi)
-        return y
+        x, cfir.zi = sg.lfilter(cfir.b, cfir.a, signal, zi=cfir.zi)
+        return x
