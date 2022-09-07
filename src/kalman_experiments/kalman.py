@@ -105,13 +105,14 @@ class Colored1DMatsudaKF:
         x_next = A * exp(2 * pi * i * f / sr) * x + n
     sr : float
         Sampling rate
-    q_sigma : float
+    q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
     psi : float
         Coefficient of the AR(1) process modelling 1/f^a colored noise;
-        see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise
-    r_sigma : float
+        see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise,
+        1 -- to Brownian motion. In between values are also allowed.
+    r_s : float
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
 
@@ -127,12 +128,12 @@ class Colored1DMatsudaKF:
 
     """
 
-    def __init__(self, A: float, f: float, sr: float, q_sigma: float, psi: float, r_sigma: float):
+    def __init__(self, A: float, f: float, sr: float, q_s: float, psi: float, r_s: float):
         Phi = complex2mat(A * exp(2 * np.pi * f / sr * 1j))
-        Q = np.eye(2) * q_sigma**2
+        Q = np.eye(2) * q_s**2
         H = np.array([[1, 0]])
         Psi = np.array([[psi]])
-        R = np.array([[r_sigma**2]])
+        R = np.array([[r_s**2]])
         self.KF = ColoredNoiseKF(n_x=2, n_z=1, Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
     def predict(self, X: Gaussian) -> Gaussian:

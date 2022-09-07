@@ -19,7 +19,7 @@ class NoiseGenerator(Protocol):
 class SingleRhythmModel:
     freq: float
     A: float
-    sigma: float
+    s: float
     sr: float
     meas_noise: NoiseGenerator
     x: complex = 0
@@ -29,7 +29,7 @@ class SingleRhythmModel:
 
     def step(self) -> float:
         """Update model state and generate measurement"""
-        self.x = self.Phi * self.x + complex_randn() * self.sigma
+        self.x = self.Phi * self.x + complex_randn() * self.s
         return self.x.real + self.meas_noise.step()
 
 
