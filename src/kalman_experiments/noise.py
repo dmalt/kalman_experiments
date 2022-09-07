@@ -25,18 +25,18 @@ class ArNoise:
 
     """
 
-    def __init__(self, y0: np.ndarray, order: int = 1, alpha: float = 1, sigma: float = 1):
+    def __init__(self, y0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
         assert (len(y0) == order), f"y0 length must match AR order; got {len(y0)=}, {order=}"
         a: list[float] = [1]
         for k in range(1, order + 1):
             a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1]
         self.a = np.array(a[1:])
         self.y = y0
-        self.sigma = sigma
+        self.s = s
 
     def step(self) -> float:
         """Make one step of the AR process"""
-        y_next = - self.a @ self.y + np.random.randn() * self.sigma
+        y_next = - self.a @ self.y + np.random.randn() * self.s
         self.y = np.concatenate([[y_next], self.y[:-1]])  # type: ignore
         return float(y_next)
 
