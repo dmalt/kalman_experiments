@@ -110,10 +110,10 @@ class Colored1DMatsudaKF:
         see eq. (1) in [2] and the explanation below
     psi : float
         Coefficient of the AR(1) process modelling 1/f^a colored noise;
-        see eq. (3) in [2]; -0.5 corresponds to 1/f noise, 0 -- to white noise
+        see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise
     r_sigma : float
-        Driving white noise covariance matrix for the noise AR model
-        (cov for e_{k-1} in eq. (3) in [2])
+        Driving white noise standard deviation for the noise AR model
+        (see cov for e_{k-1} in eq. (3) in [2])
 
     References
     ----------

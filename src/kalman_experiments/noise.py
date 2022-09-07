@@ -15,7 +15,7 @@ class ArNoise:
     alpha : float in range [-2, 2]
         Alpha as in '1/f^alpha'
     sigma : float, >= 0
-        White noise variance (see [1])
+        White noise standard deviation (see [1])
 
     References
     ----------
