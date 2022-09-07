@@ -11,5 +11,4 @@ Mat = npt.NDArray[np.floating[Any]]  # of shape(n, m)
 Vec2 = npt.NDArray[np.floating[Any]]  # of shape(2, 1)
 Mat2 = npt.NDArray[np.floating[Any]]  # of shape(2, 2)
 
-ComplexTimeseries = npt.NDArray[np.complex_]  # of shape(n_samp,)
-RealTimeseries = npt.NDArray[np.floating]  # of shape(n_samp,)
+Timeseries = npt.NDArray[np.number]  # of shape(n_samp,)
