@@ -8,7 +8,7 @@ class ArNoise:
 
     Parameters
     ----------
-    y0 : np.ndarray of shape(order,)
+    x0 : np.ndarray of shape(order,)
         Initial conditions vector for the AR model
     order : int
         Order of the AR model
@@ -25,19 +25,19 @@ class ArNoise:
 
     """
 
-    def __init__(self, y0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
-        assert (len(y0) == order), f"y0 length must match AR order; got {len(y0)=}, {order=}"
+    def __init__(self, x0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
+        assert (len(x0) == order), f"x0 length must match AR order; got {len(x0)=}, {order=}"
         a: list[float] = [1]
         for k in range(1, order + 1):
             a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1]
         self.a = np.array(a[1:])
-        self.y = y0
+        self.x = x0
         self.s = s
 
     def step(self) -> float:
         """Make one step of the AR process"""
-        y_next = - self.a @ self.y + np.random.randn() * self.s
-        self.y = np.concatenate([[y_next], self.y[:-1]])  # type: ignore
+        y_next = - self.a @ self.x + np.random.randn() * self.s
+        self.x = np.concatenate([[y_next], self.x[:-1]])  # type: ignore
         return float(y_next)
 
 
@@ -69,31 +69,3 @@ def prepare_real_noise(
     data *= sigma
     crop = slice(minsamp, maxsamp)
     return RealNoise(data[crop]), raw.info["sfreq"]
-
-
-if __name__ == "__main__":
-    o = 1
-    alpha = 1
-    # an = ArNoise(np.array([0] * o), alpha=1, order=o, sigma=199)
-    y0 = np.random.rand(o)
-    print(y0.shape)
-    an = ArNoise(y0, alpha=alpha, order=o, sigma=1.5)
-    # an = ArNoise(np.zeros(o), alpha=alpha, order=o, sigma=1.5)
-    res = []
-    for i in range(100_000):
-        res.append(an.step())
-    res = np.array(res)
-    print(an.a)
-    import matplotlib.pyplot as plt
-    from scipy.signal import welch
-    freqs, psd = welch(res, fs=125, nperseg=1024)
-    plt.plot(freqs[1:-1], psd[1:-1])
-    plt.plot(freqs[1:-1], [1 / f ** alpha for f in freqs[1:-1]])
-    plt.yscale("log")
-    plt.xscale("log")
-    plt.legend([f"AR({o}) for 1/f noise", "1/f"])
-    plt.grid()
-    plt.show()
-    # plt.plot(res)
-
-    plt.show()
