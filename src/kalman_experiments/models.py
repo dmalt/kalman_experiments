@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
-import numpy.typing as npt
+
+from kalman_experiments.numpy_types import ComplexTimeseries, RealTimeseries
 
 from .complex import complex_randn
 
@@ -22,7 +23,6 @@ class SingleRhythmModel:
     A: float
     s: float
     sr: float
-    meas_noise: SignalGenerator
     x: complex = 0
 
     def __post_init__(self):
@@ -31,7 +31,7 @@ class SingleRhythmModel:
     def step(self) -> float:
         """Update model state and generate measurement"""
         self.x = self.Phi * self.x + complex_randn() * self.s
-        return self.x.real + self.meas_noise.step()
+        return self.x.real
 
 
 class StatefulSignalGenerator(SignalGenerator, Protocol):
@@ -40,15 +40,11 @@ class StatefulSignalGenerator(SignalGenerator, Protocol):
         ...
 
 
-ComplexTimeseries = npt.NDArray[np.complex_]  # of shape(n_samp,)
-RealTimeseries = npt.NDArray[np.floating]  # of shape(n_samp,)
-
-
 class ModelAdapter:
     def __init__(self, model: StatefulSignalGenerator):
         self.model = model
 
-    def create_states_and_meas(self, n_samp: int) -> tuple[ComplexTimeseries, RealTimeseries]:
+    def collect_states_and_meas(self, n_samp: int) -> tuple[ComplexTimeseries, RealTimeseries]:
         states = np.zeros(n_samp, dtype=complex)
         meas = np.zeros(n_samp)
         for i in range(n_samp):
