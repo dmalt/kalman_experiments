@@ -1,7 +1,8 @@
 import numpy as np
 from mne.io import read_raw_brainvision
 
-from kalman_experiments.numpy_types import Vec
+from kalman_experiments.models import SignalGenerator
+from kalman_experiments.numpy_types import RealTimeseries, Vec
 
 
 def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
@@ -90,3 +91,11 @@ def prepare_real_noise(
     data *= sigma
     crop = slice(minsamp, maxsamp)
     return RealNoise(data[crop]), raw.info["sfreq"]
+
+
+class NoiseAdapter:
+    def __init__(self, noise_model: SignalGenerator):
+        self.noise_model = noise_model
+
+    def collect_meas(self, n_samp: int) -> RealTimeseries:
+        return np.array([self.noise_model.step() for _ in range(n_samp)])
