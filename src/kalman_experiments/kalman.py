@@ -7,7 +7,7 @@ from .complex import complex2mat, vec2complex
 from .numpy_types import Cov, Mat, Vec, Vec1D
 
 
-class ColoredNoiseKF:
+class DifferenceColoredKF:
     """
     'Alternative approach' implementation for KF with colored noise from [1]
 
@@ -87,12 +87,12 @@ class Gaussian(NamedTuple):
     Sigma: Cov
 
 
-class Colored1DMatsudaKF:
+class Difference1DMatsudaKF:
     """
     Single oscillation - single measurement Kalman filter with colored noise
 
     Using Matsuda's model for oscillation prediction, see [1], and AR(1) to
-    make account for 1/f^a measurement noise, see [2]. Wraps ColoredNoiseKF to
+    make account for 1/f^a measurement noise, see [2]. Wraps DifferenceColoredKF to
     avoid trouble with properly arranging matrix and vector shapes.
 
     Parameters
@@ -133,7 +133,7 @@ class Colored1DMatsudaKF:
         H = np.array([[1, 0]])
         Psi = np.array([[psi]])
         R = np.array([[r_s**2]])
-        self.KF = ColoredNoiseKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
+        self.KF = DifferenceColoredKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
     def predict(self, X: Gaussian) -> Gaussian:
         return Gaussian(*self.KF.predict(X.mu, X.Sigma))
@@ -151,7 +151,7 @@ class Colored1DMatsudaKF:
         return self.update_no_meas(X_) if y is None else self.update(y, X_)
 
 
-def apply_kf(kf: Colored1DMatsudaKF, signal: Vec1D, delay: int) -> Vec1D:
+def apply_kf(kf: Difference1DMatsudaKF, signal: Vec1D, delay: int) -> Vec1D:
     if delay > 0:
         raise NotImplementedError("Kalman smoothing is not implemented")
     res = []
