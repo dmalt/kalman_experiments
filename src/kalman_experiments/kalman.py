@@ -152,17 +152,13 @@ class Colored1DMatsudaKF:
         return self.update_no_meas(X_) if y is None else self.update(y, X_)
 
 
-class KFAdapter:
-    def __init__(self, kf: Colored1DMatsudaKF):
-        self.kf = kf
-
-    def apply(self, signal: Vec1D, delay: int) -> Vec1D:
-        if delay > 0:
-            raise NotImplementedError("Kalman smoothing is not implemented")
-        res = []
-        for y in signal:
-            state = self.kf.step(y)
-            for _ in range(abs(delay)):
-                state = self.kf.predict(state)
-            res.append(vec2complex(state.mu))
-        return np.array(res)
+def apply_kf(kf: Colored1DMatsudaKF, signal: Vec1D, delay: int) -> Vec1D:
+    if delay > 0:
+        raise NotImplementedError("Kalman smoothing is not implemented")
+    res = []
+    for y in signal:
+        state = kf.step(y)
+        for _ in range(abs(delay)):
+            state = kf.predict(state)
+        res.append(vec2complex(state.mu))
+    return np.array(res)

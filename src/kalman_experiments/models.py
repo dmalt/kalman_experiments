@@ -29,10 +29,10 @@ class SingleRhythmModel:
     def __post_init__(self):
         self.Phi = self.A * exp(2 * np.pi * self.freq / self.sr * 1j)
 
-    def step(self) -> float:
+    def step(self) -> complex:
         """Update model state and generate measurement"""
         self.x = self.Phi * self.x + complex_randn() * self.s
-        return self.x.real
+        return self.x
 
 
 def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
@@ -110,10 +110,10 @@ class RealNoise:
 def prepare_real_noise(
     raw_path: str, s: float = 1, minsamp: int = 0, maxsamp: int | None = None
 ) -> tuple[RealNoise, float]:
-    raw = read_raw_brainvision(raw_path, preload=True)
+    raw = read_raw_brainvision(raw_path, preload=True, verbose="ERROR")
     raw.pick_channels(["FC2"])
     raw.crop(tmax=244)
-    raw.filter(l_freq=0.1, h_freq=None)
+    raw.filter(l_freq=0.1, h_freq=None, verbose="ERROR")
 
     data = np.squeeze(raw.get_data())
     data /= data.std()
