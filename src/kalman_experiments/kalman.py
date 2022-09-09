@@ -13,20 +13,16 @@ class ColoredNoiseKF:
 
     Parameters
     ----------
-    n_x : int
-        Number of channels in the state vector
-    n_z : int
-        Number of channels in measurements
-    Phi : np.ndarray of shape(n_x, n_x)
+    Phi : np.ndarray of shape(n_states, n_states)
         State transfer matrix
-    Q : np.ndarray of shape(n_x, n_x)
+    Q : np.ndarray of shape(n_states, n_states)
         Process noise covariance matrix (see eq.(1) in [1])
-    H : np.ndarray of shape(n_z, n_x)
+    H : np.ndarray of shape(n_meas, n_states)
         Matrix of the measurements model (see eq.(2) in [1]); maps state to
         measurements
-    Psi : np.ndarray of shape(n_z, n_z)
+    Psi : np.ndarray of shape(n_meas, n_meas)
         Measurement noise transfer matrix (see eq. (3) in [1])
-    R : np.ndarray of shape(n_z, n_z)
+    R : np.ndarray of shape(n_meas, n_meas)
         Driving noise covariance matrix for the noise AR model (cov for e_{k-1}
         in eq. (3) in [1])
 
@@ -38,17 +34,20 @@ class ColoredNoiseKF:
 
     """
 
-    def __init__(self, n_x: int, n_z: int, Phi: Mat, Q: Cov, H: Mat, Psi: Mat, R: Cov):
+    def __init__(self, Phi: Mat, Q: Cov, H: Mat, Psi: Mat, R: Cov):
+        n_states = Phi.shape[0]
+        n_meas = H.shape[0]
+
         self.Phi = Phi
         self.Q = Q
         self.H = H
         self.Psi = Psi
         self.R = R
 
-        self.x = np.zeros((n_x, 1))  # posterior state (after update)
-        self.P = np.zeros((n_x, n_x))  # posterior state covariance (after update)
+        self.x = np.zeros((n_states, 1))  # posterior state (after update)
+        self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
 
-        self.y_prev = np.zeros((n_z, 1))
+        self.y_prev = np.zeros((n_meas, 1))
 
     def predict(self, x: Vec, P: Cov) -> tuple[Vec, Cov]:
         x_ = self.Phi @ x  # eq. (26) from [1]
@@ -134,7 +133,7 @@ class Colored1DMatsudaKF:
         H = np.array([[1, 0]])
         Psi = np.array([[psi]])
         R = np.array([[r_s**2]])
-        self.KF = ColoredNoiseKF(n_x=2, n_z=1, Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
+        self.KF = ColoredNoiseKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
     def predict(self, X: Gaussian) -> Gaussian:
         return Gaussian(*self.KF.predict(X.mu, X.Sigma))
