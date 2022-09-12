@@ -82,6 +82,70 @@ class DifferenceColoredKF:
         return self.update(y, x_, P_) if y is not None else self.update_no_meas(x_, P_)
 
 
+class SimpleKF:
+    """
+    Standard Kalman filter implementation
+
+    Parameters
+    ----------
+    Phi : np.ndarray of shape(n_states, n_states)
+        State transfer matrix
+    Q : np.ndarray of shape(n_states, n_states)
+        Process noise covariance matrix
+    H : np.ndarray of shape(n_meas, n_states)
+        Matrix of the measurements model; maps state to measurements
+    R : np.ndarray of shape(n_meas, n_meas)
+        Driving noise covariance matrix for the noise AR model
+
+    """
+
+    def __init__(self, Phi: Mat, Q: Cov, H: Mat, R: Cov):
+        self.Phi = Phi
+        self.Q = Q
+        self.H = H
+        self.R = R
+
+        n_states = Phi.shape[0]
+        self.x = np.zeros((n_states, 1))  # posterior state (after update)
+        self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
+
+    def predict(self, x: Vec, P: Cov) -> tuple[Vec, Cov]:
+        x_ = self.Phi @ x
+        P_ = self.Phi @ P @ self.Phi.T + self.Q
+        return x_, P_
+
+    def update(self, y: Vec, x_: Vec, P_: Cov) -> tuple[Vec, Cov]:
+        n = y - self.H @ x_
+        Sigma = self.H @ P_ @ self.H.T + self.R
+        Pxn = P_ @ self.H.T
+
+        K = Pxn / Sigma
+        self.x = x_ + K * n
+        self.P = P_ - K * Sigma @ K.T
+        return self.x, self.P
+
+    def update_no_meas(self, x_: Vec, P_: Cov):
+        """Update step when the measurement is missing"""
+        self.x = x_
+        self.P = P_
+        return x_, P_
+
+    def step(self, y: Vec | None) -> tuple[Vec, Cov]:
+        x_, P_ = self.predict(self.x, self.P)
+        return self.update(y, x_, P_) if y is not None else self.update_no_meas(x_, P_)
+
+
+class PerturbedP_KF(SimpleKF):
+    def __init__(self, Phi: Mat, Q: Cov, H: Mat, R: Cov, lambda_: float = 1e-6):
+        super().__init__(Phi, Q, H, R)
+        self.lambda_ = lambda_
+
+    def update(self, y: Vec, x_: Vec, P_: Cov) -> tuple[Vec, Cov]:
+        super().update(y, x_, P_)
+        self.P += self.lambda_
+        return self.x, self.P
+
+
 class Gaussian(NamedTuple):
     mu: Vec
     Sigma: Cov
