@@ -58,30 +58,36 @@ def plot_kalman_vs_cfir(
 
 def plot_crosscorrelations(t_ms, corrs_cfir, corrs_kf):
     fig = plt.figure(figsize=(9, 5))
+    # fig = plt.figure()
     ax = plt.subplot()
     ind_cfir = np.argmax(corrs_cfir)
     ind_kf = np.argmax(corrs_kf)
 
-    ax.plot(t_ms, corrs_cfir, "C1", label="cfir")
-    ax.axvline(t_ms[ind_cfir], color="C1")
-    ax.axhline(corrs_cfir[ind_cfir], color="C1")
-    ax.plot(t_ms, corrs_kf, "C2", label="kalman")
-    ax.axvline(t_ms[ind_kf], color="C2")
-    ax.axhline(corrs_kf[ind_kf], color="C2")
-    ax.set_xlabel("delay, ms")
-    ax.set_ylabel("correlation")
+    C1 = "#d1a683"
+    C2 = "#005960"
+    ax.plot(t_ms, corrs_cfir, color=C1, label="CFIR")
+    ax.axvline(t_ms[ind_cfir], color=C1)
+    ax.axhline(corrs_cfir[ind_cfir], color=C1)
+    ax.plot(t_ms, corrs_kf, C2, label="Kalman")
+    ax.axvline(t_ms[ind_kf], color=C2)
+    ax.axhline(corrs_kf[ind_kf], color=C2)
+    ax.set_xlabel("delay, ms", fontsize=14)
+    ax.set_ylabel("correlation", fontsize=14)
     ax.set_ylim([0, 1])
-    ax.legend()
+    ax.legend(fontsize=14)
     ax.grid()
 
+    ax.annotate(f"{t_ms[ind_kf]} ms", (t_ms[ind_kf] + 1, 0.02), color=C2, fontsize=16)
+    ax.annotate(f"{t_ms[ind_cfir]} ms", (t_ms[ind_cfir] + 1, 0.02), color=C1, fontsize=16)
     ax.annotate(
-        f"d={t_ms[ind_kf]} ms, c={round(corrs_kf[ind_kf], 2)}",
-        (t_ms[ind_kf] + 0.002, corrs_kf[ind_kf] + 0.02),
+        f"{corrs_kf[ind_kf]:.2f}", (-100, corrs_kf[ind_kf] + 0.01), color=C2, fontsize=16
     )
     ax.annotate(
-        f"d={t_ms[ind_cfir]} ms, c={round(corrs_cfir[ind_cfir], 2)}",
-        (t_ms[ind_cfir] + 0.002, corrs_cfir[ind_cfir] - 0.05),
+        f"{corrs_cfir[ind_cfir]:.2f}",
+        (-100, corrs_cfir[ind_cfir] + 0.01),
+        color=C1,
+        fontsize=16,
     )
 
-    plt.subplots_adjust(wspace=0.5, hspace=0.5)
+    # plt.subplots_adjust(wspace=0.5, hspace=0.5)
     return fig, ax

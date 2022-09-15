@@ -1,5 +1,6 @@
+from abc import ABC
 from cmath import exp
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -115,13 +116,13 @@ class SimpleKF:
         return x_, P_
 
     def update(self, y: Vec, x_: Vec, P_: Cov) -> tuple[Vec, Cov]:
-        n = y - self.H @ x_
         Sigma = self.H @ P_ @ self.H.T + self.R
         Pxn = P_ @ self.H.T
 
         K = Pxn / Sigma
-        self.x = x_ + K * n
-        self.P = P_ - K * Sigma @ K.T
+        n = y - self.H @ x_
+        self.x = x_ + K @ n
+        self.P = P_ - K @ Sigma @ K.T
         return self.x, self.P
 
     def update_no_meas(self, x_: Vec, P_: Cov):
@@ -135,14 +136,14 @@ class SimpleKF:
         return self.update(y, x_, P_) if y is not None else self.update_no_meas(x_, P_)
 
 
-class PerturbedP_KF(SimpleKF):
+class PerturbedPKF(SimpleKF):
     def __init__(self, Phi: Mat, Q: Cov, H: Mat, R: Cov, lambda_: float = 1e-6):
         super().__init__(Phi, Q, H, R)
         self.lambda_ = lambda_
 
     def update(self, y: Vec, x_: Vec, P_: Cov) -> tuple[Vec, Cov]:
         super().update(y, x_, P_)
-        self.P += self.lambda_
+        self.P += np.eye(len(self.P)) * self.lambda_
         return self.x, self.P
 
 
@@ -151,7 +152,26 @@ class Gaussian(NamedTuple):
     Sigma: Cov
 
 
-class Difference1DMatsudaKF:
+class OneDimKF(ABC):
+    KF: Any
+
+    def predict(self, X: Gaussian) -> Gaussian:
+        return Gaussian(*self.KF.predict(X.mu, X.Sigma))
+
+    def update(self, y: float, X_: Gaussian) -> Gaussian:
+        y_arr = np.array([[y]])
+        return Gaussian(*self.KF.update(y=y_arr, x_=X_.mu, P_=X_.Sigma))
+
+    def update_no_meas(self, X_: Gaussian) -> Gaussian:
+        """Update step when the measurement is missing"""
+        return Gaussian(*self.KF.update_no_meas(x_=X_.mu, P_=X_.Sigma))
+
+    def step(self, y: float | None) -> Gaussian:
+        X_ = self.predict(Gaussian(self.KF.x, self.KF.P))
+        return self.update_no_meas(X_) if y is None else self.update(y, X_)
+
+
+class Difference1DMatsudaKF(OneDimKF):
     """
     Single oscillation - single measurement Kalman filter with colored noise
 
@@ -199,23 +219,81 @@ class Difference1DMatsudaKF:
         R = np.array([[r_s**2]])
         self.KF = DifferenceColoredKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
-    def predict(self, X: Gaussian) -> Gaussian:
-        return Gaussian(*self.KF.predict(X.mu, X.Sigma))
 
-    def update(self, y: float, X_: Gaussian) -> Gaussian:
-        y_arr = np.array([[y]])
-        return Gaussian(*self.KF.update(y=y_arr, x_=X_.mu, P_=X_.Sigma))
+class PerturbedP1DMatsudaKF(OneDimKF):
+    """
+    Single oscillation - single measurement Kalman filter with colored noise
 
-    def update_no_meas(self, X_: Gaussian) -> Gaussian:
-        """Update step when the measurement is missing"""
-        return Gaussian(*self.KF.update_no_meas(x_=X_.mu, P_=X_.Sigma))
+    Using Matsuda's model for oscillation prediction, see [1], and AR(1) to
+    make account for 1/f^a measurement noise, see [2]. Wraps DifferenceColoredKF to
+    avoid trouble with properly arranging matrix and vector shapes.
 
-    def step(self, y: float | None) -> Gaussian:
-        X_ = self.predict(Gaussian(self.KF.x, self.KF.P))
-        return self.update_no_meas(X_) if y is None else self.update(y, X_)
+    Parameters
+    ----------
+    A : float
+        A in Matsuda's step equation: x_next = A * exp(2 * pi * i * f / sr) * x + n
+    f : float
+        Oscillation frequency; f in Matsuda's step equation:
+        x_next = A * exp(2 * pi * i * f / sr) * x + n
+    sr : float
+        Sampling rate
+    q_s : float
+        Standard deviation of model's driving noise (std(n) in the formula above),
+        see eq. (1) in [2] and the explanation below
+    psi : float
+        Coefficient of the AR(1) process modelling 1/f^a colored noise;
+        see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise,
+        1 -- to Brownian motion. In between values are also allowed.
+    r_s : float
+        Driving white noise standard deviation for the noise AR model
+        (see cov for e_{k-1} in eq. (3) in [2])
+
+    References
+    ----------
+    .. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition
+    into Oscillation Components and Phase Estimation.” Neural Computation 29,
+    no. 2 (February 2017): 332–67. https://doi.org/10.1162/NECO_a_00916.
+
+    .. [2] Chang, G. "On kalman filter for linear system with colored
+    measurement noise". J Geod 88, 1163–1170, 2014
+    https://doi.org/10.1007/s00190-014-0751-7
+
+    """
+
+    def __init__(
+        self,
+        A: float,
+        f: float,
+        sr: float,
+        q_s: float,
+        psi: np.ndarray,
+        r_s: float,
+        lambda_: float = 1e-6,
+    ):
+        ns = len(psi)  # number of noise states
+
+        Phi = np.block(
+            [  # pyright: ignore
+                [complex2mat(A * exp(2 * np.pi * f / sr * 1j)), np.zeros([2, ns])],
+                [np.zeros([1, 2]), psi[np.newaxis, :]],
+                [np.zeros([ns - 1, 2]), np.eye(ns - 1), np.zeros([ns - 1, 1])],
+            ]
+        )
+        Q_noise = np.zeros([ns, ns])
+        Q_noise[0, 0] = r_s**2
+        Q = np.block(
+            [  # pyright: ignore
+                [np.eye(2) * q_s**2, np.zeros([2, ns])],
+                [np.zeros([ns, 2]), Q_noise],
+            ]
+        )
+
+        H = np.array([[1, 0, 1] + [0] * (ns - 1)])
+        R = np.array([[0]])
+        self.KF = PerturbedPKF(Phi=Phi, Q=Q, H=H, R=R, lambda_=lambda_)
 
 
-def apply_kf(kf: Difference1DMatsudaKF, signal: Vec1D, delay: int) -> Vec1D:
+def apply_kf(kf: OneDimKF, signal: Vec1D, delay: int) -> Vec1D:
     if delay > 0:
         raise NotImplementedError("Kalman smoothing is not implemented")
     res = []
