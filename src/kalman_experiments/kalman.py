@@ -1,3 +1,24 @@
+"""
+
+References
+----------
+.. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition into
+Oscillation Components and Phase Estimation.” Neural Computation 29, no. 2
+(February 2017): 332–67. https://doi.org/10.1162/NECO_a_00916.
+
+.. [2] Chang, G. "On kalman filter for linear system with colored measurement
+noise". J Geod 88, 1163–1170, 2014 https://doi.org/10.1007/s00190-014-0751-7
+
+.. [3] Wang, Kedong, Yong Li, and Chris Rizos. “Practical Approaches to Kalman
+Filtering with Time-Correlated Measurement Errors.” IEEE Transactions on
+Aerospace and Electronic Systems 48, no. 2 (2012): 1669–81.
+https://doi.org/10.1109/TAES.2012.6178086.
+
+.. [4] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
+Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings of
+the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
+
+"""
 from abc import ABC
 from cmath import exp
 from typing import Any, NamedTuple
@@ -10,28 +31,22 @@ from .numpy_types import Cov, Mat, Vec, Vec1D
 
 class DifferenceColoredKF:
     """
-    'Alternative approach' implementation for KF with colored noise from [1]
+    'Alternative approach' implementation for KF with colored noise from [2]
 
     Parameters
     ----------
     Phi : np.ndarray of shape(n_states, n_states)
         State transfer matrix
     Q : np.ndarray of shape(n_states, n_states)
-        Process noise covariance matrix (see eq.(1) in [1])
+        Process noise covariance matrix (see eq.(1) in [2])
     H : np.ndarray of shape(n_meas, n_states)
-        Matrix of the measurements model (see eq.(2) in [1]); maps state to
+        Matrix of the measurements model (see eq.(2) in [2]); maps state to
         measurements
     Psi : np.ndarray of shape(n_meas, n_meas)
-        Measurement noise transfer matrix (see eq. (3) in [1])
+        Measurement noise transfer matrix (see eq. (3) in [2])
     R : np.ndarray of shape(n_meas, n_meas)
         Driving noise covariance matrix for the noise AR model (cov for e_{k-1}
-        in eq. (3) in [1])
-
-    References
-    ----------
-    .. [1] Chang, G. "On kalman filter for linear system with colored
-    measurement noise". J Geod 88, 1163–1170, 2014
-    https://doi.org/10.1007/s00190-014-0751-7
+        in eq. (3) in [2])
 
     """
 
@@ -87,6 +102,8 @@ class SimpleKF:
     """
     Standard Kalman filter implementation
 
+    Implementation follows eq. (2, 3) from [3]
+
     Parameters
     ----------
     Phi : np.ndarray of shape(n_states, n_states)
@@ -137,6 +154,31 @@ class SimpleKF:
 
 
 class PerturbedPKF(SimpleKF):
+    """
+    Perturbed P implementation from [3] for KF with augmented state space
+
+    Parameters
+    ----------
+    Phi : np.ndarray of shape(n_aug_states, n_aug_states)
+        Augmented state transfer matrix (see eq. (9) in [3])
+    Q : np.ndarray of shape(n_aug_states, n_aug_states)
+        Augmented process noise covariance matrix (see eq.(9) in [3])
+    H : np.ndarray of shape(n_meas, n_aug_states)
+        Augmented matrix of the measurements model (see eq.(9) in [3]); maps
+        augmented state to measurements
+    R : np.ndarray of shape(n_meas, n_meas)
+        Measurements covariance matrix, usually of zeroes, see notes
+    lambda_ : float, default=1e-6
+        Perturbation factor for P, see eq. (19) in [3].
+
+    Notes
+    -----
+    R is added for possible regularization and normally must be a zero matrix,
+    since the measurement errors are incorporated into the augmented state
+    vector
+
+    """
+
     def __init__(self, Phi: Mat, Q: Cov, H: Mat, R: Cov, lambda_: float = 1e-6):
         super().__init__(Phi, Q, H, R)
         self.lambda_ = lambda_
@@ -153,6 +195,7 @@ class Gaussian(NamedTuple):
 
 
 class OneDimKF(ABC):
+    """Single oscillation - single measurement Kalman filter abstraction"""
     KF: Any
 
     def predict(self, X: Gaussian) -> Gaussian:
@@ -173,11 +216,12 @@ class OneDimKF(ABC):
 
 class Difference1DMatsudaKF(OneDimKF):
     """
-    Single oscillation - single measurement Kalman filter with colored noise
+    Single oscillation - single measurement Kalman filter with AR(1) colored noise
 
-    Using Matsuda's model for oscillation prediction, see [1], and AR(1) to
-    make account for 1/f^a measurement noise, see [2]. Wraps DifferenceColoredKF to
-    avoid trouble with properly arranging matrix and vector shapes.
+    Using Matsuda's model for oscillation prediction, see [1], and a difference
+    scheme to incorporate AR(1) 1/f^a measurement noise, see [2]. Wraps
+    DifferenceColoredKF to avoid trouble with properly arranging matrix and
+    vector shapes.
 
     Parameters
     ----------
@@ -194,24 +238,10 @@ class Difference1DMatsudaKF(OneDimKF):
     psi : float
         Coefficient of the AR(1) process modelling 1/f^a colored noise;
         see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise,
-        1 -- to Brownian motion, see [3]. In between values are also allowed.
+        1 -- to Brownian motion, see [4]. In between values are also allowed.
     r_s : float
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
-
-    References
-    ----------
-    .. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition
-    into Oscillation Components and Phase Estimation.” Neural Computation 29,
-    no. 2 (February 2017): 332–67. https://doi.org/10.1162/NECO_a_00916.
-
-    .. [2] Chang, G. "On kalman filter for linear system with colored
-    measurement noise". J Geod 88, 1163–1170, 2014
-    https://doi.org/10.1007/s00190-014-0751-7
-
-    .. [3] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
-    Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings
-    of the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
 
     """
 
@@ -226,11 +256,13 @@ class Difference1DMatsudaKF(OneDimKF):
 
 class PerturbedP1DMatsudaKF(OneDimKF):
     """
-    Single oscillation - single measurement Kalman filter with colored noise
+    Single oscillation - single measurement Kalman filter with AR(n_ar) colored noise
 
-    Using Matsuda's model for oscillation prediction, see [1], and AR(1) to
-    make account for 1/f^a measurement noise, see [2]. Wraps DifferenceColoredKF to
-    avoid trouble with properly arranging matrix and vector shapes.
+    Using Matsuda's model for oscillation prediction, see [1], and AR(n) to
+    make account for 1/f^a measurement noise. Previous states for
+    AR(n_ar) are included via state-space augmentation with the Perturbed P
+    stabilization technique, see [3]. Wraps PerturbedPKF to avoid trouble with
+    properly arranging matrix and vector shapes.
 
     Parameters
     ----------
@@ -244,27 +276,15 @@ class PerturbedP1DMatsudaKF(OneDimKF):
     q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
-    psi : np.ndarray
-        Coefficients of the AR(n) process modelling 1/f^a colored noise;
+    psi : np.ndarray of shape(n_ar,)
+        Coefficients of the AR(n_ar) process modelling 1/f^a colored noise;
         used to set up Psi as in eq. (3) in [2];
-        coefficients correspond to $-a_i$ in eq. (115) in [3]
+        coefficients correspond to $-a_i$ in eq. (115) in [4]
     r_s : float
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
-
-    References
-    ----------
-    .. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition
-    into Oscillation Components and Phase Estimation.” Neural Computation 29,
-    no. 2 (February 2017): 332–67. https://doi.org/10.1162/NECO_a_00916.
-
-    .. [2] Chang, G. "On kalman filter for linear system with colored
-    measurement noise". J Geod 88, 1163–1170, 2014
-    https://doi.org/10.1007/s00190-014-0751-7
-
-    .. [3] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
-    Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings
-    of the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
+    lambda_ : float, default=1e-6
+        Perturbation factor for P, see eq. (19) in [3]
 
     """
 
