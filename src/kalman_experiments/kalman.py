@@ -194,7 +194,7 @@ class Difference1DMatsudaKF(OneDimKF):
     psi : float
         Coefficient of the AR(1) process modelling 1/f^a colored noise;
         see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise,
-        1 -- to Brownian motion. In between values are also allowed.
+        1 -- to Brownian motion, see [3]. In between values are also allowed.
     r_s : float
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
@@ -208,6 +208,10 @@ class Difference1DMatsudaKF(OneDimKF):
     .. [2] Chang, G. "On kalman filter for linear system with colored
     measurement noise". J Geod 88, 1163–1170, 2014
     https://doi.org/10.1007/s00190-014-0751-7
+
+    .. [3] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
+    Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings
+    of the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
 
     """
 
@@ -240,10 +244,10 @@ class PerturbedP1DMatsudaKF(OneDimKF):
     q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
-    psi : float
-        Coefficient of the AR(1) process modelling 1/f^a colored noise;
-        see eq. (3) in [2]; 0.5 corresponds to 1/f noise, 0 -- to white noise,
-        1 -- to Brownian motion. In between values are also allowed.
+    psi : np.ndarray
+        Coefficients of the AR(n) process modelling 1/f^a colored noise;
+        used to set up Psi as in eq. (3) in [2];
+        coefficients correspond to $-a_i$ in eq. (115) in [3]
     r_s : float
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
@@ -257,6 +261,10 @@ class PerturbedP1DMatsudaKF(OneDimKF):
     .. [2] Chang, G. "On kalman filter for linear system with colored
     measurement noise". J Geod 88, 1163–1170, 2014
     https://doi.org/10.1007/s00190-014-0751-7
+
+    .. [3] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
+    Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings
+    of the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
 
     """
 
@@ -294,6 +302,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
 
 def apply_kf(kf: OneDimKF, signal: Vec1D, delay: int) -> Vec1D:
+    """Convenience function to filter all signal samples at once with KF"""
     if delay > 0:
         raise NotImplementedError("Kalman smoothing is not implemented")
     res = []
