@@ -19,19 +19,24 @@ class SignalGenerator(Protocol):
 
 
 @dataclass
-class SingleRhythmModel:
-    freq: float
+class MatsudaParams:
     A: float
-    s: float
+    freq: float
     sr: float
-    x: complex = 0
 
     def __post_init__(self):
         self.Phi = self.A * exp(2 * np.pi * self.freq / self.sr * 1j)
 
+
+@dataclass
+class SingleRhythmModel:
+    mp: MatsudaParams
+    sigma: float
+    x: complex = 0
+
     def step(self) -> complex:
         """Update model state and generate measurement"""
-        self.x = self.Phi * self.x + complex_randn() * self.s
+        self.x = self.mp.Phi * self.x + complex_randn() * self.sigma
         return self.x
 
 
@@ -41,8 +46,8 @@ def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
     ----------
     order : int
         Order of the AR model
-    alpha : float in range [-2, 2]
-        Alpha as in '1/f^alpha'
+    alpha : float in the [-2, 2] range
+        Alpha as in '1/f^alpha' PSD profile
 
     References
     ----------
