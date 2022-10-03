@@ -47,8 +47,8 @@ def plot_kalman_vs_cfir(
     ax2.legend(["plv(gt, kf)", "plv(gt, cfir)"])
     ax2.grid()
 
-    ax3.plot(t, np.abs(kf_states)[2 * n_samp : 3 * n_samp], alpha=0.9)
-    ax3.plot(t, np.abs(cfir_states)[2 * n_samp : 3 * n_samp], alpha=0.7)
+    ax3.plot(t, np.roll(np.abs(kf_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.9)
+    ax3.plot(t, np.roll(np.abs(cfir_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.7)
     ax3.plot(t, np.abs(gt_states)[2 * n_samp : 3 * n_samp], alpha=0.7)
     ax3.plot(t, np.abs(hilbert(meas))[2 * n_samp : 3 * n_samp], alpha=0.3)  # pyright: ignore
     ax3.legend(["kalman envelope", "cfir envelope", "gt envelope", "meas envelope"])
