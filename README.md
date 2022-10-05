@@ -15,6 +15,6 @@ Data download
 ```bash
 cd data
 datalad clone https://github.com/OpenNeuroDatasets/ds004148.git
-cd ds004148
+cd ds004148/sub-01/ses-session2/eeg
 datalad get sub-01_ses-session2_task-eyesopen_eeg.eeg sub-01_ses-session2_task-eyesopen_eeg.vhdr  sub-01_ses-session2_task-eyesopen_eeg.vmrk
 ```

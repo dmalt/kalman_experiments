@@ -29,30 +29,57 @@ def plot_generated_signal(noise, meas, sr, alpha, legend, tmin=0, tmax=2):
     return fig, ax1, ax2
 
 
+def plot_timeseries(ax, times, timeseries: list[dict[str, Any]]):
+    for ts in timeseries:
+        ax.plot(times, **ts)
+    ax.legend()
+    ax.grid()
+
+
 def plot_kalman_vs_cfir(
     meas, gt_states, kf_states, cfir_states, plv_win_kf, plv_win_cfir, n_samp, sr, delay
 ):
-    t = np.arange(n_samp) / sr
+    times = np.arange(n_samp) / sr
+    meas = meas[2 * n_samp : 3 * n_samp]
+    gt_states = gt_states[2 * n_samp : 3 * n_samp]
+    kf_states = np.roll(kf_states, shift=-delay)[2 * n_samp : 3 * n_samp]
+    cfir_states = np.roll(cfir_states, shift=-delay)[2 * n_samp : 3 * n_samp]
+
+    plv_win_kf = plv_win_kf[2 * n_samp : 3 * n_samp]
+    plv_win_cfir = plv_win_cfir[2 * n_samp : 3 * n_samp]
+
     f, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(9, 10))
-    ax1.plot(t, np.roll(np.real(kf_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.9)
-    ax1.plot(t, np.roll(np.real(cfir_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.9)
-    ax1.plot(t, meas[2 * n_samp : 3 * n_samp], alpha=0.3, linewidth=1)
-    ax1.plot(t, np.real(gt_states)[2 * n_samp : 3 * n_samp], "-", alpha=0.3, linewidth=4)
-    ax1.legend(["kalman state (Re)", "cfir state (Re)", "measurements", "ground truth state (Re)"])
-    ax1.grid()
+    plot_timeseries(
+        ax1,
+        times,
+        [
+            dict(y=np.real(kf_states), alpha=0.9, label="kalman state (Re)"),
+            dict(y=np.real(cfir_states), alpha=0.9, label="cfir state (Re)"),
+            dict(y=meas, alpha=0.3, linewidth=1, label="measurements"),
+            dict(y=np.real(gt_states), alpha=0.3, linewidth=4, label="ground truth state (Re)"),
+        ],
+    )
 
+    plot_timeseries(
+        ax2,
+        times,
+        [
+            dict(y=np.abs(plv_win_kf), linewidth=2, label="plv(gt, kf)"),
+            dict(y=np.abs(plv_win_cfir), linewidth=2, label="plv(gt, cfir)"),
+        ],
+    )
+
+    plot_timeseries(
+        ax3,
+        times,
+        [
+            dict(y=np.abs(kf_states), alpha=0.9, label="kalman envelope"),
+            dict(y=np.abs(cfir_states), alpha=0.7, label="cfir envelope"),
+            dict(y=np.abs(gt_states), alpha=0.7, label="gt envelope"),
+            dict(y=np.abs(hilbert(meas)), alpha=0.3, label="meas envelope"),  # pyright: ignore
+        ]
+    )
     plt.xlabel("Time, sec")
-    ax2.plot(t, np.abs(plv_win_kf)[2 * n_samp : 3 * n_samp], linewidth=2)
-    ax2.plot(t, np.abs(plv_win_cfir)[2 * n_samp : 3 * n_samp], linewidth=2)
-    ax2.legend(["plv(gt, kf)", "plv(gt, cfir)"])
-    ax2.grid()
-
-    ax3.plot(t, np.roll(np.abs(kf_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.9)
-    ax3.plot(t, np.roll(np.abs(cfir_states), shift=-delay)[2 * n_samp : 3 * n_samp], alpha=0.7)
-    ax3.plot(t, np.abs(gt_states)[2 * n_samp : 3 * n_samp], alpha=0.7)
-    ax3.plot(t, np.abs(hilbert(meas))[2 * n_samp : 3 * n_samp], alpha=0.3)  # pyright: ignore
-    ax3.legend(["kalman envelope", "cfir envelope", "gt envelope", "meas envelope"])
-    ax3.grid()
     return f, ax1, ax2, ax3
 
 
@@ -79,9 +106,7 @@ def plot_crosscorrelations(t_ms, corrs_cfir, corrs_kf):
 
     ax.annotate(f"{t_ms[ind_kf]} ms", (t_ms[ind_kf] + 1, 0.02), color=C2, fontsize=16)
     ax.annotate(f"{t_ms[ind_cfir]} ms", (t_ms[ind_cfir] + 1, 0.02), color=C1, fontsize=16)
-    ax.annotate(
-        f"{corrs_kf[ind_kf]:.2f}", (-100, corrs_kf[ind_kf] + 0.01), color=C2, fontsize=16
-    )
+    ax.annotate(f"{corrs_kf[ind_kf]:.2f}", (-100, corrs_kf[ind_kf] + 0.01), color=C2, fontsize=16)
     ax.annotate(
         f"{corrs_cfir[ind_cfir]:.2f}",
         (-100, corrs_cfir[ind_cfir] + 0.01),
