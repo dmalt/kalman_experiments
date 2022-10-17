@@ -11,7 +11,6 @@ pip install -e .
 Data download
 -------------
 
-
 ```bash
 cd data
 datalad clone https://github.com/OpenNeuroDatasets/ds004148.git
