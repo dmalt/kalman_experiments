@@ -88,13 +88,6 @@ def gen_filt_pink_noise_w_added_pink_noise(duration_sec: float, Fs: float) -> Si
 
     To get the broadband oscillation, filtfilt pink noise with FIR bandpass filter
 
-    Examples
-    --------
-    >>> # Generate 10 seconds of data sampled at 1000 Hz
-    >>> data, true_phase = gen_filt_pink_noise_w_added_pink_noise(10, 1000)
-    >>> print(len(data), len(true_phase))
-    10000 10000
-
     """
     A = 10
     FIR_ORDER = 750
