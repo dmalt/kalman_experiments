@@ -333,29 +333,35 @@ class PerturbedP1DMatsudaSmoother(OneDimKF):
         q_s: float,
         psi: np.ndarray,
         r_s: float,
+        lag: int = 0,
         lambda_: float = 1e-6,
     ):
+        lag = 0 if lag < 0 else lag
+        n_aug_x = lag * 2
         ns = len(psi)  # number of noise states
 
         Phi = np.block(
             [  # pyright: ignore
-                [complex2mat(A * exp(2 * np.pi * f / sr * 1j)), np.zeros([2, ns])],
-                [np.zeros([1, 2]), psi[np.newaxis, :]],
-                [np.zeros([ns - 1, 2]), np.eye(ns - 1), np.zeros([ns - 1, 1])],
+                [complex2mat(M.Phi), np.zeros([2, ns + n_aug_x])],
+                [np.eye(n_aug_x), np.zeros([n_aug_x, 2 + ns])],
+                [np.zeros([1, n_aug_x + 2]), psi[np.newaxis, :]],
+                [np.zeros([ns - 1, n_aug_x + 2]), np.eye(ns - 1), np.zeros([ns - 1, 1])],
             ]
         )
         Q_noise = np.zeros([ns, ns])
         Q_noise[0, 0] = r_s**2
         Q = np.block(
             [  # pyright: ignore
-                [np.eye(2) * q_s**2, np.zeros([2, ns])],
-                [np.zeros([ns, 2]), Q_noise],
+                [np.eye(2) * q_s**2, np.zeros([2, ns + n_aug_x])],
+                [np.zeros([n_aug_x, n_aug_x + ns + 2])],
+                [np.zeros([ns, n_aug_x + 2]), Q_noise],
             ]
         )
 
-        H = np.array([[1, 0, 1] + [0] * (ns - 1)])
+        H = np.array([[1, 0] + [0] * n_aug_x + [1] + [0] * (ns - 1)])
         R = np.array([[0]])
         self.KF = PerturbedPKF(Phi=Phi, Q=Q, H=H, R=R, lambda_=lambda_)
+        self.lag = lag
 
 
 def apply_kf(kf: OneDimKF, signal: Vec1D, delay: int) -> Vec1D:
