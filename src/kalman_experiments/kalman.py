@@ -29,6 +29,7 @@ from typing import Any, NamedTuple
 import numpy as np
 
 from .complex import complex2mat, vec2complex
+from .models import MatsudaParams
 from .numpy_types import Cov, Mat, Vec, Vec1D
 
 
@@ -273,13 +274,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     Parameters
     ----------
-    A : float
-        A in Matsuda's step equation: x_next = A * exp(2 * pi * i * f / sr) * x + n
-    f : float
-        Oscillation frequency; f in Matsuda's step equation:
-        x_next = A * exp(2 * pi * i * f / sr) * x + n
-    sr : float
-        Sampling rate
+    M : MatsudaParams
     q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
@@ -297,9 +292,44 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     def __init__(
         self,
-        A: float,
-        f: float,
-        sr: float,
+        M: MatsudaParams,
+        q_s: float,
+        psi: np.ndarray,
+        r_s: float,
+        lambda_: float = 1e-6,
+    ):
+        ns = len(psi)  # number of noise states
+
+        Phi_blocks = [
+            [complex2mat(M.A * exp(2 * np.pi * M.freq / M.sr * 1j)), np.zeros([2, ns])],
+        ]
+        if ns:
+            Phi_blocks.append([np.zeros([1, 2]), psi[np.newaxis, :]])
+            Phi_blocks.append([np.zeros([ns - 1, 2]), np.eye(ns - 1), np.zeros([ns - 1, 1])])
+        Phi = np.block(Phi_blocks)  # pyright: ignore
+        Q_blocks = [[np.eye(2) * q_s**2, np.zeros([2, ns])]]
+        if ns:
+            Q_noise = np.zeros([ns, ns])
+            Q_noise[0, 0] = r_s**2
+            Q_blocks.append([np.zeros([ns, 2]), Q_noise])
+        Q = np.block(Q_blocks)  # pyright: ignore
+
+        H_noise = [1] + [0] * (ns - 1) if ns else []
+        H = np.array([[1, 0] + H_noise])
+        if ns:
+            R = np.array([[0]])
+        else:
+            R = np.array([[r_s**2]])
+        self.KF = PerturbedPKF(Phi=Phi, Q=Q, H=H, R=R, lambda_=lambda_)
+        self.M = M
+        self.psi = psi
+        self.lambda_ = lambda_
+
+
+class PerturbedP1DMatsudaSmoother(OneDimKF):
+    def __init__(
+        self,
+        M: MatsudaParams,
         q_s: float,
         psi: np.ndarray,
         r_s: float,
