@@ -1,4 +1,7 @@
 """
+Kalman filter implementations
+
+
 
 References
 ----------
@@ -197,7 +200,8 @@ class Gaussian(NamedTuple):
 
 
 class OneDimKF(ABC):
-    """Single oscillation - single measurement Kalman filter abstraction"""
+    """Single measurement Kalman filter abstraction"""
+
     KF: Any
 
     def predict(self, X: Gaussian) -> Gaussian:
@@ -212,6 +216,7 @@ class OneDimKF(ABC):
         return Gaussian(*self.KF.update_no_meas(x_=X_.mu, P_=X_.Sigma))
 
     def step(self, y: float | None) -> Gaussian:
+        """Predict and update in one step"""
         X_ = self.predict(Gaussian(self.KF.x, self.KF.P))
         return self.update_no_meas(X_) if y is None else self.update(y, X_)
 
