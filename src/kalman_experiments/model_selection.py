@@ -72,22 +72,15 @@ def fit_kf_parameters(
     sr = KF.M.sr
     prev_freq = KF.M.freq
     model_error = np.inf
-    print(f"{KF.psi=}, {len(KF.psi)=}")
     for i in range(n_iter):
-        print("iter->", i)
-        print(f"{KF.KF.P=}")
-        print(f"{KF.M=}")
         Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF)
         freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
-        print(f"{Phi=}, {KF.KF.Phi=}")
         amp = min(
             np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
         )
         q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
         r_s = np.sqrt(Q[2, 2])
-        print(f"{q_s=}, {r_s=}, {KF.psi=}")
         psi = Phi[2, -len(KF.psi) : len(Phi)]
-        print(f"{len(psi)=}, {len(KF.psi)=}, {len(Phi)=}")
         KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, psi, r_s, KF.lambda_)
         KF.KF.x = x_0
         KF.KF.P = P_0
@@ -108,7 +101,6 @@ def em_step(meas: Vec | Vec1D, KF: SimpleKF) -> KFParams:
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
-    # print(x)
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
