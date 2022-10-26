@@ -117,16 +117,17 @@ class SimpleKF:
 
     """
 
-    def __init__(self, Phi: Mat, Q: Cov, H: Mat, R: Cov):
+    def __init__(
+        self, Phi: Mat, Q: Cov, H: Mat, R: Cov, x_0: Vec | None = None, P_0: Cov | None = None
+    ):
         self.Phi = Phi
         self.Q = Q
         self.H = H
         self.R = R
 
         n_states = Phi.shape[0]
-        self.x = np.zeros((n_states, 1))  # posterior state (after update)
-        self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
-
+        self.x = np.zeros((n_states, 1)) if x_0 is None else x_0  # posterior state (after update)
+        self.P = np.eye(n_states) * 1e-3 if P_0 is None else P_0  # posterior cov (after update)
     def predict(self, x: Vec, P: Cov) -> tuple[Vec, Cov]:
         x_ = self.Phi @ x
         P_ = self.Phi @ P @ self.Phi.T + self.Q
