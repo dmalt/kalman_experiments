@@ -32,6 +32,8 @@ from .complex import complex2mat, vec2complex
 from .models import MatsudaParams
 from .numpy_types import Cov, Mat, Vec, Vec1D
 
+# from statsmodels.regression.linear_model import yule_walker
+
 
 class DifferenceColoredKF:
     """
@@ -366,12 +368,34 @@ class PerturbedP1DMatsudaSmoother(OneDimKF):
 
 def apply_kf(kf: OneDimKF, signal: Vec1D, delay: int) -> Vec1D:
     """Convenience function to filter all signal samples at once with KF"""
-    if delay > 0:
-        raise NotImplementedError("Kalman smoothing is not implemented")
     res = []
-    for y in signal:
-        state = kf.step(y)
-        for _ in range(abs(delay)):
-            state = kf.predict(state)
-        res.append(vec2complex(state.mu))
+    # AR_ORDER = 2
+    if delay > 0:
+        assert hasattr(kf, "lag"), "Smoothing is not implemented for this KF"
+        assert kf.lag <= delay  # pyright: ignore
+        for y in signal:
+            state = kf.step(y)
+            res.append(vec2complex(state.mu[delay * 2 : (delay + 1) * 2]))
+    else:
+        k = 0
+        for y in signal:
+            state = kf.step(y)
+            # envs = np.abs([vec2complex(state.mu[i * 2:(i + 1) * 2]) for i in range(5)])
+            # rho, _ = yule_walker(envs, order=AR_ORDER)
+            #     print(f"{rho=}, {envs=}")
+            # envs_ar = list(envs[:AR_ORDER])
+            # new_env = envs[0]
+            for _ in range(abs(delay)):
+                state = kf.predict(state)
+                # new_env = rho.dot(envs_ar)
+                # new_env += de
+                # de += de2
+                # envs_ar = [new_env] + envs_ar[:-1]
+                # if not k % 500:
+                #     print(f"{envs_ar=}")
+            k += 1
+            pred = vec2complex(state.mu[:2])
+            pred /= np.abs(pred)
+            pred *= new_env
+            res.append(pred)
     return np.array(res)
