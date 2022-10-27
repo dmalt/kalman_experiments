@@ -324,6 +324,8 @@ class PerturbedP1DMatsudaKF(OneDimKF):
         self.M = M
         self.psi = psi
         self.lambda_ = lambda_
+        self.q_s = q_s
+        self.r_s = r_s
 
 
 class PerturbedP1DMatsudaSmoother(OneDimKF):
