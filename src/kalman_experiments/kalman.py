@@ -1,8 +1,6 @@
 """
 Kalman filter implementations
 
-
-
 References
 ----------
 .. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition into
