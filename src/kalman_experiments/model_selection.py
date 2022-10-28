@@ -73,8 +73,9 @@ def fit_kf_parameters(
     sr = KF.M.sr
     prev_freq = KF.M.freq
     model_error = np.inf
-    for _ in trange(n_iter, description="Fitting KF parameters"):
-        Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_full_upd, q_full_upd, r_full_upd)
+    for _ in trange(n_iter, desc="Fitting KF parameters"):
+        # Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_full_upd, q_full_upd, r_full_upd)
+        Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_osc_only_upd, q_full_upd, r_null_upd)
         freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
         amp = min(
             np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
@@ -82,7 +83,7 @@ def fit_kf_parameters(
         q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
         r_s = np.sqrt(Q[2, 2])
         psi = Phi[2, -len(KF.psi) : len(Phi)]
-        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
+        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, psi, r_s, KF.lambda_)
         KF.KF.x = x_0
         KF.KF.P = P_0
         model_error = abs(freq - prev_freq)
@@ -94,7 +95,7 @@ def fit_kf_parameters(
     return KF
 
 
-PhiUpdateStrategy = Callable[[Mat, dict[str, Mat], Cov], Mat]
+PhiUpdateStrategy = Callable[[Mat, dict[str, Mat]], Mat]
 QUpdateStrategy = Callable[[Cov, dict[str, Mat], Mat, int], Cov]
 RUpdateStrategy = Callable[[Cov, Mat, list[Vec], list[Cov], list[Vec]], Cov]
 
@@ -117,7 +118,7 @@ def em_step(
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
     S = compute_aux_em_matrices(x_n, P_n, P_nt)
-    Phi_new = phi_upd(Phi, S, Q)
+    Phi_new = phi_upd(Phi, S)
     Q_new = q_upd(Q, S, Phi, n)
     R_new = r_upd(R, A, x_n, P_n, y)
     x_0_new = x_n[0]
@@ -238,8 +239,15 @@ def compute_aux_em_matrices(x_n: list[Vec], P_n: list[Cov], P_nt: list[Mat]) -> 
     return S
 
 
-def phi_full_upd(Phi: Mat, S: dict[str, Mat], Q: Cov) -> Mat:
+def phi_full_upd(Phi: Mat, S: dict[str, Mat]) -> Mat:
     return np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
+
+
+def phi_osc_only_upd(Phi: Mat, S: dict[str, Mat], n_osc: int = 1) -> Mat:
+    Phi_new = np.copy(Phi)
+    Phi_upd = np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
+    Phi_new[:2 * n_osc, :2 * n_osc] = Phi_upd[:2 * n_osc, :2 * n_osc]
+    return Phi_new
 
 
 def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
@@ -253,6 +261,10 @@ def r_full_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> 
         tmp = (y[t] - A @ x_n[t])
         res += tmp @ tmp.T + A @ P_n[t] @ A.T
     return res / n
+
+
+def r_null_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
+    return np.zeros_like(R)
 
 
 if __name__ == "__main__":
