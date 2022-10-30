@@ -114,6 +114,7 @@ def em_step(
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
+    print("nll=", compute_kf_negloglikelihood(y, x, P, KF))
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
@@ -265,6 +266,18 @@ def r_full_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> 
 
 def r_null_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
     return np.zeros_like(R)
+
+
+def compute_kf_negloglikelihood(y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF) -> float:
+    n = len(y) - 1
+    negloglikelihood = 0
+    for t in range(1, n + 1):
+        x_, P_ = KF.predict(x[t], P[t])
+        eps = y[t] - KF.H @ x_
+        Sigma = KF.H @ P_ @ KF.H.T + KF.R
+        tmp = np.linalg.solve(Sigma, eps)  # Sigma inversion
+        negloglikelihood += 0.5 * (np.log(np.linalg.det(Sigma)) + eps.T @ tmp)
+    return negloglikelihood
 
 
 if __name__ == "__main__":
