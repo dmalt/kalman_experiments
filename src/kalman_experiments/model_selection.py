@@ -58,23 +58,28 @@ from kalman_experiments.numpy_types import (
     Cov,
     Mat,
     PositiveFloat,
+    PositiveInt,
     Vec,
     Vec1D,
     check_positive_float,
+    check_positive_int,
 )
 
 
 class KFParams(NamedTuple):
-    A: float
-    f: float
-    q_s: float
-    r_s: float
+    A: PositiveFloat
+    f: PositiveFloat
+    q_s: PositiveFloat
+    r_s: PositiveFloat
     x_0: Vec
     P_0: Cov
 
 
 def fit_kf_parameters(
-    meas: Vec | Vec1D, KF: PerturbedP1DMatsudaKF, n_iter: int = 800, tol: float = 1e-3
+    meas: Vec | Vec1D,
+    KF: PerturbedP1DMatsudaKF,
+    n_iter: PositiveInt = check_positive_int(800),
+    tol: PositiveFloat = check_positive_float(1e-3),
 ) -> PerturbedP1DMatsudaKF:
 
     AMP_EPS = 1e-4
@@ -253,7 +258,7 @@ def phi_full_upd(Phi: Mat, S: dict[str, Mat]) -> Mat:
     return np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
 
 
-def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float, float, float]:
+def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: PositiveInt) -> tuple[float, float, float, float]:
     A = S["00"][0, 0] + S["00"][1, 1]
     B = S["10"][0, 0] + S["10"][1, 1]
     C = S["10"][1, 0] - S["10"][0, 1]
@@ -300,12 +305,14 @@ def compute_kf_negloglikelihood(
     return negloglikelihood, r_2
 
 
-def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> PositiveFloat:
+def theor_psd_ar(
+    f: PositiveFloat, s: PositiveFloat, ar_coef: Collection[float], sr: PositiveFloat
+) -> PositiveFloat:
     denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
     return check_positive_float(s**2 / np.abs(denom) ** 2)
 
 
-def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> PositiveFloat:
+def theor_psd_mk_mar(f: PositiveFloat, s: PositiveFloat, mp: MatsudaParams) -> PositiveFloat:
     """Theoretical PSD for Matsuda-Komaki multivariate AR process"""
     phi = 2 * np.pi * mp.freq / mp.sr
     psi = 2 * np.pi * f / mp.sr
@@ -316,16 +323,16 @@ def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> PositiveFloat:
     return check_positive_float(s**2 * num / denom)
 
 
-PsdFunc = Callable[[float], float]
+PsdFunc = Callable[[PositiveFloat], PositiveFloat]
 
 
-def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> PositiveFloat:
+def get_psd_val_from_est(f: PositiveFloat, freqs: np.ndarray, psd: np.ndarray) -> PositiveFloat:
     ind = np.argmin((freqs - f) ** 2)
     return check_positive_float(psd[ind])
 
 
 def estimate_sigmas_squared(
-    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float]
+    basis_psd_funcs: Sequence[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[PositiveFloat]
 ) -> list[PositiveFloat]:
     A = []
     b = [1] * len(freqs)
@@ -339,4 +346,5 @@ def estimate_sigmas_squared(
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()

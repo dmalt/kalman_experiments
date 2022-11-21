@@ -7,7 +7,18 @@ from typing import Protocol
 import numpy as np
 from mne.io.brainvision.brainvision import read_raw_brainvision
 
-from kalman_experiments.numpy_types import Timeseries, Vec
+from kalman_experiments.numpy_types import (
+    Alpha,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    Timeseries,
+    Vec,
+    check_in_alpha_range,
+    check_nonnegative_int,
+    check_positive_float,
+    check_positive_int,
+)
 
 from .complex import complex_randn
 
@@ -21,9 +32,10 @@ class SignalGenerator(Protocol):
 @dataclass
 class MatsudaParams:
     """Single oscillation Matsuda-Komaki model parameters"""
-    A: float
-    freq: float
-    sr: float
+
+    A: PositiveFloat
+    freq: PositiveFloat
+    sr: PositiveFloat
 
     def __post_init__(self):
         self.Phi = self.A * exp(2 * np.pi * self.freq / self.sr * 1j)
@@ -32,7 +44,7 @@ class MatsudaParams:
 @dataclass
 class SingleRhythmModel:
     mp: MatsudaParams
-    sigma: float
+    sigma: PositiveFloat
     x: complex = 0
 
     def step(self) -> complex:
@@ -41,11 +53,11 @@ class SingleRhythmModel:
         return self.x
 
 
-def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
+def gen_ar_noise_coefficients(alpha: Alpha, order: PositiveInt) -> Vec:
     """
     Parameters
     ----------
-    order : int
+    order : positive int
         Order of the AR model
     alpha : float in the [-2, 2] range
         Alpha as in '1/f^alpha' PSD profile
@@ -71,7 +83,7 @@ class ArNoise:
     ----------
     x0 : np.ndarray of shape(order,)
         Initial conditions vector for the AR model
-    order : int
+    order : int, > 0
         Order of the AR model
     alpha : float in range [-2, 2]
         Alpha as in '1/f^alpha'
@@ -86,8 +98,14 @@ class ArNoise:
 
     """
 
-    def __init__(self, x0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
-        assert (len(x0) == order), f"x0 length must match AR order; got {len(x0)=}, {order=}"
+    def __init__(
+        self,
+        x0: np.ndarray,
+        order: PositiveInt = check_positive_int(1),
+        alpha: Alpha = check_in_alpha_range(1),
+        s: PositiveFloat = check_positive_float(1),
+    ):
+        assert len(x0) == order, f"x0 length must match AR order; got {len(x0)=}, {order=}"
         self.a = gen_ar_noise_coefficients(alpha, order)
         self.x = x0
         self.s = s
@@ -100,7 +118,7 @@ class ArNoise:
 
 
 class RealNoise:
-    def __init__(self, single_channel_eeg: Timeseries, s: float):
+    def __init__(self, single_channel_eeg: Timeseries, s: PositiveFloat):
         self.single_channel_eeg = single_channel_eeg
         self.ind = 0
         self.s = s
@@ -114,8 +132,11 @@ class RealNoise:
 
 
 def prepare_real_noise(
-    raw_path: str, s: float = 1, minsamp: int = 0, maxsamp: int | None = None
-) -> tuple[RealNoise, float]:
+    raw_path: str,
+    s: PositiveFloat = check_positive_float(1),
+    minsamp: NonNegativeInt = check_nonnegative_int(0),
+    maxsamp: PositiveInt | None = None,
+) -> tuple[RealNoise, PositiveFloat]:
     raw = read_raw_brainvision(raw_path, preload=True, verbose="ERROR")
     raw.pick_channels(["FC2"])
     raw.crop(tmax=244)
@@ -125,8 +146,8 @@ def prepare_real_noise(
     data /= data.std()
     data -= data.mean()
     crop = slice(minsamp, maxsamp)
-    return RealNoise(data[crop], s), raw.info["sfreq"]
+    return RealNoise(data[crop], s), check_positive_float(raw.info["sfreq"])
 
 
-def collect(signal_generator: SignalGenerator, n_samp: int) -> Timeseries:
+def collect(signal_generator: SignalGenerator, n_samp: PositiveInt) -> Timeseries:
     return np.array([signal_generator.step() for _ in range(n_samp)])
