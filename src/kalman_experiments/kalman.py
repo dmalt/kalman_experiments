@@ -399,7 +399,7 @@ def apply_kf(kf: OneDimKF, signal: Vec1D, delay: int) -> Vec1D:
                 #     print(f"{envs_ar=}")
             k += 1
             pred = vec2complex(state.mu[:2])
-            pred /= np.abs(pred)
-            pred *= new_env
+            # pred /= np.abs(pred)
+            # pred *= new_env
             res.append(pred)
     return np.array(res)
