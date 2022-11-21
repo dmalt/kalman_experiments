@@ -47,7 +47,7 @@ Fit params pink noise
 >>> kf = fit_kf_parameters(sim.data, kf)
 
 """
-from typing import Callable, NamedTuple
+from typing import Callable, Collection, NamedTuple, Sequence
 
 import numpy as np
 from tqdm import trange
@@ -58,15 +58,16 @@ from kalman_experiments.numpy_types import Cov, Mat, Vec, Vec1D
 
 
 class KFParams(NamedTuple):
-    Phi: Mat
-    Q: Cov
-    R: Cov
+    A: float
+    f: float
+    q_s: float
+    r_s: float
     x_0: Vec
     P_0: Cov
 
 
 def fit_kf_parameters(
-    meas: Vec | Vec1D, KF: PerturbedP1DMatsudaKF, n_iter: int = 400, tol: float = 1e-4
+    meas: Vec | Vec1D, KF: PerturbedP1DMatsudaKF, n_iter: int = 800, tol: float = 1e-3
 ) -> PerturbedP1DMatsudaKF:
 
     AMP_EPS = 1e-4
@@ -75,15 +76,20 @@ def fit_kf_parameters(
     model_error = np.inf
     for _ in trange(n_iter, desc="Fitting KF parameters"):
         # Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_full_upd, q_full_upd, r_full_upd)
-        Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_osc_only_upd, q_full_upd, r_null_upd)
-        freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
-        amp = min(
-            np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
-        )
-        q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
-        r_s = np.sqrt(Q[2, 2])
-        psi = Phi[2, -len(KF.psi) : len(Phi)]
-        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, psi, r_s, KF.lambda_)
+        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF, phi_osc_only_upd)
+        # freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
+        # amp = min(
+        #     np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
+        # )
+        amp = min(amp, 1 - AMP_EPS)
+        freq *= sr / (2 * np.pi)
+
+        # amp = np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4)
+        # q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
+        # r_s = np.sqrt(Q[2, 2])
+        # psi = Phi[2, -len(KF.psi) : len(Phi)]
+        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
+        # print(KF.M, KF.q_s, KF.r_s)
         KF.KF.x = x_0
         KF.KF.P = P_0
         model_error = abs(freq - prev_freq)
@@ -104,8 +110,6 @@ def em_step(
     meas: Vec | Vec1D,
     KF: SimpleKF,
     phi_upd: PhiUpdateStrategy,
-    q_upd: QUpdateStrategy,
-    r_upd: RUpdateStrategy,
 ) -> KFParams:
     n = len(meas)
     Phi, A, Q, R = KF.Phi, KF.H, KF.Q, KF.R
@@ -114,18 +118,16 @@ def em_step(
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
-    print("nll=", compute_kf_negloglikelihood(y, x, P, KF))
+    # print("nll, r2 =", compute_kf_negloglikelihood(y, x, P, KF))
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
     S = compute_aux_em_matrices(x_n, P_n, P_nt)
-    Phi_new = phi_upd(Phi, S)
-    Q_new = q_upd(Q, S, Phi, n)
-    R_new = r_upd(R, A, x_n, P_n, y)
+    freq, Amp, q_s, r_s = phi_upd(S, Phi, n)
     x_0_new = x_n[0]
     P_0_new = P_n[0]
 
-    return KFParams(Phi_new, Q_new, R_new, x_0_new, P_0_new)
+    return KFParams(Amp, freq, q_s, r_s, x_0_new, P_0_new)
 
 
 def normalize_measurement_dimensions(meas: Vec1D) -> list[Vec]:
@@ -244,11 +246,18 @@ def phi_full_upd(Phi: Mat, S: dict[str, Mat]) -> Mat:
     return np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
 
 
-def phi_osc_only_upd(Phi: Mat, S: dict[str, Mat], n_osc: int = 1) -> Mat:
-    Phi_new = np.copy(Phi)
-    Phi_upd = np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
-    Phi_new[:2 * n_osc, :2 * n_osc] = Phi_upd[:2 * n_osc, :2 * n_osc]
-    return Phi_new
+def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float, float, float]:
+    A = S["00"][0, 0] + S["00"][1, 1]
+    B = S["10"][0, 0] + S["10"][1, 1]
+    C = S["10"][1, 0] - S["10"][0, 1]
+    D = S["11"][0, 0] + S["11"][1, 1]
+    f = max(C / B, 0)
+    Amp = np.sqrt(B**2 + C**2) / A
+    q_s = np.sqrt(max(0.5 * (D - Amp**2 * A) / n, 1e-6))
+    r_s = np.sqrt(
+        (S["11"][2, 2] - 2 * S["10"][2, :] @ Phi.T[:, 2] + (Phi[2, :] @ S["00"] @ Phi.T[:, 2])) / n
+    )
+    return f, Amp, q_s, r_s
 
 
 def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
@@ -258,8 +267,8 @@ def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
 def r_full_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
     n, sensors_cnt = len(x_n) - 1, A.shape[0]
     res = np.zeros((sensors_cnt, sensors_cnt))
-    for t in range(1, n+1):
-        tmp = (y[t] - A @ x_n[t])
+    for t in range(1, n + 1):
+        tmp = y[t] - A @ x_n[t]
         res += tmp @ tmp.T + A @ P_n[t] @ A.T
     return res / n
 
@@ -268,19 +277,57 @@ def r_null_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> 
     return np.zeros_like(R)
 
 
-def compute_kf_negloglikelihood(y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF) -> float:
+def compute_kf_negloglikelihood(
+    y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF
+) -> tuple[float, float]:
     n = len(y) - 1
     negloglikelihood = 0
+    r_2: float = 0
     for t in range(1, n + 1):
         x_, P_ = KF.predict(x[t], P[t])
         eps = y[t] - KF.H @ x_
+        r_2 += float(eps @ eps.T)
         Sigma = KF.H @ P_ @ KF.H.T + KF.R
         tmp = np.linalg.solve(Sigma, eps)  # Sigma inversion
         negloglikelihood += 0.5 * (np.log(np.linalg.det(Sigma)) + eps.T @ tmp)
-    return negloglikelihood
+    return negloglikelihood, r_2
+
+
+def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], fs: float) -> float:
+    denom = 1 - sum(a * np.exp(-2j * np.pi * f / fs * m) for m, a in enumerate(ar_coef, 1))
+    return s**2 / np.abs(denom) ** 2
+
+
+def theor_psd_mk_mar(f: float, s: float, A: float, f0: float, fs: float) -> float:
+    phi = 2 * np.pi * f0 / fs
+    psi = 2 * np.pi * f / fs
+
+    denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
+    num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
+    return s**2 * num / denom
+
+
+PsdFunc = Callable[[float], float]
+
+
+def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> float:
+    ind = np.argmin((freqs - f) ** 2)
+    return psd[ind]
+
+
+def estimate_sigmas(
+    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float]
+) -> np.ndarray:
+    A = []
+    b = [1] * len(freqs)
+    for row, f in enumerate(freqs):
+        b_ = data_psd_func(f)
+        A.append([])
+        for func in basis_psd_funcs:
+            A[row].append(func(f) / b_)
+    return np.linalg.lstsq(np.array(A), np.array(b))[0]
 
 
 if __name__ == "__main__":
     import doctest
-
     doctest.testmod()
