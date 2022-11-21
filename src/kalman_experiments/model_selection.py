@@ -54,7 +54,14 @@ from tqdm import trange
 
 from kalman_experiments.kalman import PerturbedP1DMatsudaKF, SimpleKF
 from kalman_experiments.models import MatsudaParams
-from kalman_experiments.numpy_types import Cov, Mat, Vec, Vec1D
+from kalman_experiments.numpy_types import (
+    Cov,
+    Mat,
+    PositiveFloat,
+    Vec,
+    Vec1D,
+    check_positive_float,
+)
 
 
 class KFParams(NamedTuple):
@@ -293,12 +300,12 @@ def compute_kf_negloglikelihood(
     return negloglikelihood, r_2
 
 
-def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
+def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> PositiveFloat:
     denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
-    return s**2 / np.abs(denom) ** 2
+    return check_positive_float(s**2 / np.abs(denom) ** 2)
 
 
-def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> float:
+def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> PositiveFloat:
     """Theoretical PSD for Matsuda-Komaki multivariate AR process"""
     phi = 2 * np.pi * mp.freq / mp.sr
     psi = 2 * np.pi * f / mp.sr
@@ -306,20 +313,20 @@ def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> float:
 
     denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
     num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
-    return s**2 * num / denom
+    return check_positive_float(s**2 * num / denom)
 
 
 PsdFunc = Callable[[float], float]
 
 
-def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> float:
+def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> PositiveFloat:
     ind = np.argmin((freqs - f) ** 2)
-    return psd[ind]
+    return check_positive_float(psd[ind])
 
 
-def estimate_sigmas(
+def estimate_sigmas_squared(
     basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float]
-) -> np.ndarray:
+) -> list[PositiveFloat]:
     A = []
     b = [1] * len(freqs)
     for row, f in enumerate(freqs):
@@ -327,7 +334,7 @@ def estimate_sigmas(
         A.append([])
         for func in basis_psd_funcs:
             A[row].append(func(f) / b_)
-    return np.linalg.lstsq(np.array(A), np.array(b))[0]
+    return [check_positive_float(s) for s in np.linalg.lstsq(np.array(A), np.array(b))[0]]
 
 
 if __name__ == "__main__":

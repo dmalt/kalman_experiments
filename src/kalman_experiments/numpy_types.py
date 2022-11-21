@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, NewType
 
 import numpy as np
 import numpy.typing as npt
@@ -12,3 +12,12 @@ Vec2 = npt.NDArray[np.floating[Any]]  # 2-dimensional vector of shape(2, 1)
 Mat2 = npt.NDArray[np.floating[Any]]  # 2-dimensional vector of shape(2, 2)
 
 Timeseries = npt.NDArray[np.number]  # one-dimensional timeseries vector of shape(n_samp,)
+
+
+PositiveFloat = NewType("PositiveFloat", float)
+
+
+def check_positive_float(num: float) -> PositiveFloat:
+    if num > 0:
+        return PositiveFloat(num)
+    raise ValueError(f"Number must be positive; got {num}")
