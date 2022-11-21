@@ -327,6 +327,12 @@ class PerturbedP1DMatsudaKF(OneDimKF):
         self.q_s = q_s
         self.r_s = r_s
 
+    def __repr__(self) -> str:
+        return (
+            f"PerturbedP1DMatsudaKF(M={self.M}, q_s={self.q_s:.2f},"
+            f" psi={self.psi}, r_s={self.r_s:.2f}, lambda_={self.lambda_})"
+        )
+
 
 class PerturbedP1DMatsudaSmoother(OneDimKF):
     def __init__(

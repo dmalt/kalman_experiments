@@ -3,3 +3,4 @@ __pycache__
 .hypothesis
 .ipynb_checkpoints
 *.npz
+.mypy_cache
