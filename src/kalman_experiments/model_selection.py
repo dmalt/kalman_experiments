@@ -293,8 +293,8 @@ def compute_kf_negloglikelihood(
     return negloglikelihood, r_2
 
 
-def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], fs: float) -> float:
-    denom = 1 - sum(a * np.exp(-2j * np.pi * f / fs * m) for m, a in enumerate(ar_coef, 1))
+def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
+    denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
     return s**2 / np.abs(denom) ** 2
 
 
