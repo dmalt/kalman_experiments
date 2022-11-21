@@ -20,6 +20,7 @@ class SignalGenerator(Protocol):
 
 @dataclass
 class MatsudaParams:
+    """Single oscillation Matsuda-Komaki model parameters"""
     A: float
     freq: float
     sr: float

@@ -298,9 +298,11 @@ def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], fs: float) -> f
     return s**2 / np.abs(denom) ** 2
 
 
-def theor_psd_mk_mar(f: float, s: float, A: float, f0: float, fs: float) -> float:
-    phi = 2 * np.pi * f0 / fs
-    psi = 2 * np.pi * f / fs
+def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> float:
+    """Theoretical PSD for Matsuda-Komaki multivariate AR process"""
+    phi = 2 * np.pi * mp.freq / mp.sr
+    psi = 2 * np.pi * f / mp.sr
+    A = mp.A
 
     denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
     num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
