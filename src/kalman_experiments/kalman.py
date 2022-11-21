@@ -30,8 +30,6 @@ from .complex import complex2mat, vec2complex
 from .models import MatsudaParams
 from .numpy_types import Cov, Mat, Vec, Vec1D
 
-# from statsmodels.regression.linear_model import yule_walker
-
 
 class DifferenceColoredKF:
     """
@@ -131,7 +129,7 @@ class SimpleKF:
 
         n_states = Phi.shape[0]
         self.x = np.zeros((n_states, 1)) if x_0 is None else x_0  # posterior state (after update)
-        self.P = np.eye(n_states) * 1e-3 if P_0 is None else P_0  # posterior cov (after update)
+        self.P = np.eye(n_states) if P_0 is None else P_0  # posterior cov (after update)
 
     def predict(self, x: Vec, P: Cov) -> tuple[Vec, Cov]:
         x_ = self.Phi @ x
