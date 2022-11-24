@@ -5,16 +5,18 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
-from mne.io.brainvision.brainvision import read_raw_brainvision
+from mne.io.brainvision.brainvision import read_raw_brainvision  # type: ignore
 
 from kalman_experiments.numpy_types import (
     Alpha,
+    NonNegativeFloat,
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
     Timeseries,
     Vec,
     check_in_alpha_range,
+    check_nonnegative_float,
     check_nonnegative_int,
     check_positive_float,
     check_positive_int,
@@ -33,18 +35,18 @@ class SignalGenerator(Protocol):
 class MatsudaParams:
     """Single oscillation Matsuda-Komaki model parameters"""
 
-    A: PositiveFloat
-    freq: PositiveFloat
+    A: NonNegativeFloat
+    freq_hz: NonNegativeFloat
     sr: PositiveFloat
 
     def __post_init__(self):
-        self.Phi = self.A * exp(2 * np.pi * self.freq / self.sr * 1j)
+        self.Phi = self.A * exp(2 * np.pi * self.freq_hz / self.sr * 1j)
 
 
 @dataclass
 class SingleRhythmModel:
     mp: MatsudaParams
-    sigma: PositiveFloat
+    sigma: NonNegativeFloat
     x: complex = 0
 
     def step(self) -> complex:
@@ -103,7 +105,7 @@ class ArNoise:
         x0: np.ndarray,
         order: PositiveInt = check_positive_int(1),
         alpha: Alpha = check_in_alpha_range(1),
-        s: PositiveFloat = check_positive_float(1),
+        s: NonNegativeFloat = check_positive_float(1),
     ):
         assert len(x0) == order, f"x0 length must match AR order; got {len(x0)=}, {order=}"
         self.a = gen_ar_noise_coefficients(alpha, order)
@@ -118,7 +120,7 @@ class ArNoise:
 
 
 class RealNoise:
-    def __init__(self, single_channel_eeg: Timeseries, s: PositiveFloat):
+    def __init__(self, single_channel_eeg: Timeseries, s: NonNegativeFloat):
         self.single_channel_eeg = single_channel_eeg
         self.ind = 0
         self.s = s
@@ -133,10 +135,10 @@ class RealNoise:
 
 def prepare_real_noise(
     raw_path: str,
-    s: PositiveFloat = check_positive_float(1),
+    s: NonNegativeFloat = check_nonnegative_float(1),
     minsamp: NonNegativeInt = check_nonnegative_int(0),
     maxsamp: PositiveInt | None = None,
-) -> tuple[RealNoise, PositiveFloat]:
+) -> tuple[RealNoise, NonNegativeFloat]:
     raw = read_raw_brainvision(raw_path, preload=True, verbose="ERROR")
     raw.pick_channels(["FC2"])
     raw.crop(tmax=244)

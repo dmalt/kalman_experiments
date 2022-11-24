@@ -1,9 +1,9 @@
 from dataclasses import asdict, dataclass
 
 import numpy as np
-import scipy.signal as sg
+import scipy.signal as sg  # type: ignore
 
-from .numpy_types import Vec1D
+from .numpy_types import NonNegativeInt, PositiveFloat, PositiveInt, Vec1D, check_positive_int
 
 
 class CFIRBandDetector:
@@ -30,10 +30,10 @@ class CFIRBandDetector:
     def __init__(
         self,
         band: tuple[float, float],
-        sr: float,
-        delay: int,
-        n_taps: int = 500,
-        n_fft: int = 2000,
+        sr: PositiveFloat,
+        delay: NonNegativeInt,
+        n_taps: PositiveInt = check_positive_int(500),
+        n_fft: PositiveInt = check_positive_int(2000),
         weights: Vec1D | None = None,
     ):
         w = np.arange(n_fft)
@@ -58,13 +58,13 @@ class CFIRBandDetector:
 @dataclass
 class CFIRParams:
     band: tuple[float, float]
-    sr: float
-    n_taps: int = 500
-    n_fft: int = 2000
+    sr: PositiveFloat
+    n_taps: PositiveInt = check_positive_int(500)
+    n_fft: PositiveInt = check_positive_int(2000)
     weights: Vec1D | None = None
 
 
-def apply_cfir(cfir_params: CFIRParams, signal: Vec1D, delay: int) -> Vec1D:
+def apply_cfir(cfir_params: CFIRParams, signal: Vec1D, delay: NonNegativeInt) -> Vec1D:
     cfir_params_dict = asdict(cfir_params) | {"delay": delay}
-    cfir = CFIRBandDetector(**cfir_params_dict)
+    cfir = CFIRBandDetector(**cfir_params_dict)  # type: ignore
     return cfir.apply(signal)

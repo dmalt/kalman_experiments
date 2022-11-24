@@ -1,6 +1,6 @@
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
-from scipy.signal import hilbert, welch
+from scipy.signal import hilbert, welch  # type: ignore
 
 
 def plot_generated_signal(noise, meas, sr, alpha, legend, tmin=0, tmax=2):

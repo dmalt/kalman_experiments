@@ -2,7 +2,7 @@
 Examples
 --------
 Get smoothed data
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
+>>> from kalman_experiments.kalman import SossAugSmoother
 >>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
 >>> import matplotlib.pyplot as plt
 >>> import numpy as np
@@ -10,7 +10,7 @@ Get smoothed data
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
 >>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
 >>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
->>> kf = PerturbedP1DMatsudaKF(mp, q_s=1, psi=np.zeros(0), r_s=10, lambda_=0).KF
+>>> kf = SossAugSmoother(mp, q_s=1, psi=np.zeros(0), r_s=10, lambda_=0).KF
 >>> y = normalize_measurement_dimensions(meas)
 >>> x, P = apply_kf(kf, y)
 >>> x_n, P_n, J = apply_kalman_interval_smoother(kf, x, P)
@@ -22,7 +22,7 @@ Get smoothed data
 
 Fit params white noise
 >>> from kalman_experiments.model_selection import fit_kf_parameters
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
+>>> from kalman_experiments.kalman import SossAugSmoother
 >>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
 >>> import matplotlib.pyplot as plt
 >>> import numpy as np
@@ -30,33 +30,41 @@ Fit params white noise
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
 >>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
 >>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
->>> kf = PerturbedP1DMatsudaKF(MatsudaParams(A=0.999, freq=1, sr=1000), q_s=2, psi=np.zeros(0), r_s=5, lambda_=0)
+>>> mp = MatsudaParams(A=0.999, freq=1, sr=1000)
+>>> kf = SossAugSmoother(mp, q_s=2, psi=np.zeros(0), r_s=5, lambda_=0)
 >>> kf = fit_kf_parameters(meas, kf)
 >>> print(kf.M)
 
 Fit params pink noise
 >>> from kalman_experiments.model_selection import fit_kf_parameters
 >>> from kalman_experiments import SSPE
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
->>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect, gen_ar_noise_coefficients
+>>> from kalman_experiments.kalman import SossAugSmoother
+>>> from kalman_experiments.models import (
+>>>     MatsudaParams, SingleRhythmModel, collect, gen_ar_noise_coefficients
+>>> )
 >>> import numpy as np
 >>> # Setup oscillatioins model and generate oscillatory signal
 >>> sim = SSPE.gen_sine_w_pink(1, 1000)
 >>> a = gen_ar_noise_coefficients(alpha=1, order=20)
->>> kf = PerturbedP1DMatsudaKF(MatsudaParams(A=0.8, freq=1, sr=1000), q_s=2, psi=a, r_s=1, lambda_=1e-3)
+>>> mp = MatsudaParams(A=0.8, freq=1, sr=1000)
+>>> kf = SossAugSmoother(mp, q_s=2, psi=a, r_s=1, lambda_=1e-3)
 >>> kf = fit_kf_parameters(sim.data, kf)
 
 """
-from typing import Callable, Collection, NamedTuple, Sequence
+from dataclasses import dataclass
+from typing import Callable, Collection, Sequence
 
 import numpy as np
 from tqdm import trange
 
-from kalman_experiments.kalman import PerturbedP1DMatsudaKF, SimpleKF
+from kalman_experiments.complex import complex2mat
+from kalman_experiments.kalman.core import Gaussian, SimpleKF
+from kalman_experiments.kalman.onedim import SossAugSmoother
 from kalman_experiments.models import MatsudaParams
 from kalman_experiments.numpy_types import (
     Cov,
     Mat,
+    NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
     Vec,
@@ -66,46 +74,39 @@ from kalman_experiments.numpy_types import (
 )
 
 
-class KFParams(NamedTuple):
-    A: PositiveFloat
-    f: PositiveFloat
-    q_s: PositiveFloat
-    r_s: PositiveFloat
-    x_0: Vec
-    P_0: Cov
+@dataclass
+class KFParams:
+    A: NonNegativeFloat
+    freq_rad: NonNegativeFloat
+    q_s: NonNegativeFloat
+    r_s: NonNegativeFloat
 
 
 def fit_kf_parameters(
     meas: Vec | Vec1D,
-    KF: PerturbedP1DMatsudaKF,
+    KF: SossAugSmoother,
     n_iter: PositiveInt = check_positive_int(800),
     tol: PositiveFloat = check_positive_float(1e-3),
-) -> PerturbedP1DMatsudaKF:
+) -> SossAugSmoother:
 
     AMP_EPS = 1e-4
-    sr = KF.M.sr
-    prev_freq = KF.M.freq
+    sr = KF.mp.sr
+    prev_freq_hz = KF.mp.freq_hz
     model_error = np.inf
-    for _ in trange(n_iter, desc="Fitting KF parameters"):
-        # Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_full_upd, q_full_upd, r_full_upd)
-        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF, phi_osc_only_upd)
-        # freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
-        # amp = min(
-        #     np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
-        # )
-        amp = min(amp, 1 - AMP_EPS)
-        freq *= sr / (2 * np.pi)
+    for i in trange(n_iter, desc="Fitting KF parameters"):
+        S, prior_state = em_step_general(meas, KF.KF)
+        kfp = params_update(S, KF, check_positive_int(len(meas)))
 
-        # amp = np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4)
-        # q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
-        # r_s = np.sqrt(Q[2, 2])
-        # psi = Phi[2, -len(KF.psi) : len(Phi)]
-        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
-        # print(KF.M, KF.q_s, KF.r_s)
-        KF.KF.x = x_0
-        KF.KF.P = P_0
-        model_error = abs(freq - prev_freq)
-        prev_freq = freq
+        amp = check_positive_float(min(kfp.A, 1 - AMP_EPS))
+        # amp = kfp.A
+        freq_hz = check_positive_float(kfp.freq_rad * sr / (2 * np.pi))
+        mp = MatsudaParams(amp, freq_hz, sr)
+
+        # kfp.r_s = 1
+        KF = SossAugSmoother(mp, kfp.q_s, KF.psi, kfp.r_s, lambda_=KF.lambda_)
+        KF.KF.state = prior_state
+        model_error = abs(freq_hz - prev_freq_hz)
+        prev_freq_hz = freq_hz
         if model_error < tol:
             break
     else:
@@ -113,71 +114,56 @@ def fit_kf_parameters(
     return KF
 
 
-PhiUpdateStrategy = Callable[[Mat, dict[str, Mat]], Mat]
-QUpdateStrategy = Callable[[Cov, dict[str, Mat], Mat, int], Cov]
-RUpdateStrategy = Callable[[Cov, Mat, list[Vec], list[Cov], list[Vec]], Cov]
+KFParamsUpdStrategy = Callable[[dict[str, Mat], Mat, PositiveInt], KFParams]
 
 
-def em_step(
-    meas: Vec | Vec1D,
-    KF: SimpleKF,
-    phi_upd: PhiUpdateStrategy,
-) -> KFParams:
-    n = len(meas)
-    Phi, A, Q, R = KF.Phi, KF.H, KF.Q, KF.R
-    assert n, "Measurements must be nonempty"
-    # assert meas.ndim == 2, "Measurements must be a column vector of shape (n_meas, 1)"
+def em_step_general(meas: Vec1D, KF: SimpleKF) -> tuple[dict[str, Mat], Gaussian]:
+    Phi, H, Q, R = KF.Phi, KF.H, KF.Q, KF.R
 
     y = normalize_measurement_dimensions(meas)
-    x, P = apply_kf(KF, y)
-    # print("nll, r2 =", compute_kf_negloglikelihood(y, x, P, KF))
-    x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
-    P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
+    # x, P = apply_kf(KF, y)
+    states_fp = KF.apply(y)
+    assert not any(np.any(np.isnan(s.x)) or np.any(np.isnan(s.P)) for s in states_fp)
+    assert not any(np.linalg.norm(s.P) > 1e10 for s in states_fp)
+    # assert False
+    print("nll = ", compute_kf_nll(y, states_fp, KF))
+    states_n, J = apply_kalman_interval_smoother(KF, states_fp)
+    P_nt = estimate_adj_state_cross_covariances(Phi, Q, H, R, [s.P for s in states_fp], J)
+    assert not any(np.linalg.norm(P) > 1e10 for P in P_nt)
 
-    S = compute_aux_em_matrices(x_n, P_n, P_nt)
-    freq, Amp, q_s, r_s = phi_upd(S, Phi, n)
-    x_0_new = x_n[0]
-    P_0_new = P_n[0]
-
-    return KFParams(Amp, freq, q_s, r_s, x_0_new, P_0_new)
+    S = compute_aux_em_matrices(states_n, P_nt)
+    # return kf_upd_func(S, Phi, n), Gaussian(x_n[0], P_n[0])
+    assert not np.any(np.isnan(S["00"]))
+    assert not np.any(np.isnan(S["10"]))
+    assert not np.any(np.isnan(S["11"]))
+    return S, states_n[0]
 
 
 def normalize_measurement_dimensions(meas: Vec1D) -> list[Vec]:
-    # prepend nan for to simplify indexing; 0 index is for x and P prior to the measurements
-    n = len(meas)
-    y: list[Vec] = [np.array([[np.nan]])] * (n + 1)
-    for t in range(1, n + 1):
-        y[t] = meas[t - 1, np.newaxis, np.newaxis]
-    return y
-
-
-def apply_kf(KF: SimpleKF, y: list[Vec]) -> tuple[list[Vec], list[Cov]]:
-    n = len(y) - 1
-    x: list[Vec] = [None] * (n + 1)  # pyright: ignore  # x^t_t
-    P: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^t_t
-    x[0], P[0] = KF.x, KF.P
-    for t in range(1, n + 1):
-        x[t], P[t] = KF.step(y[t])
-    return x, P
+    return [np.array([[m]]) for m in meas]
 
 
 def apply_kalman_interval_smoother(
-    KF: SimpleKF, x: list[Vec], P: list[Cov]
-) -> tuple[list[Vec], list[Cov], list[Mat]]:
-    n = len(x) - 1
-    x_n: list[Vec] = [None] * (n + 1)  # pyright: ignore  # x^n_t
-    P_n: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^n_t
-    x_n[n], P_n[n] = x[n], P[n]
-    J: list[Mat] = [None] * (n + 1)  # pyright: ignore
+    KF: SimpleKF, states_fp: list[Gaussian]
+) -> tuple[list[Gaussian], list[Mat]]:
+    n = len(states_fp) - 1
+    # x_n: list[Vec] = [np.zeros_like(states_fp[0].x)] * (n + 1)  # pyright: ignore  # x^n_t
+    # P_n: list[Cov] = [np.zeros_like(states_fp[0].P)] * (n + 1)  # pyright: ignore  # P^n_t
+    states_n = [Gaussian(np.zeros_like(states_fp[0].x), np.zeros_like(states_fp[0].P))] * (n + 1)
+    states_n[n] = states_fp[n]
+    J: list[Mat] = [np.empty_like(states_fp[0].P)] * (n + 1)  # pyright: ignore
     for t in range(n, 0, -1):
-        x_n[t - 1], P_n[t - 1], J[t - 1] = smoother_step(KF, x[t - 1], P[t - 1], x_n[t], P_n[t])
+        states_n[t - 1], J[t - 1] = smoother_step(KF, states_fp[t - 1], states_n[t])
 
-    return x_n, P_n, J
+    return states_n, J
 
 
-def smoother_step(KF: SimpleKF, x: Vec, P: Cov, x_n: Vec, P_n: Cov) -> tuple[Vec, Cov, Mat]:
+def smoother_step(KF: SimpleKF, state: Gaussian, state_n: Gaussian) -> tuple[Gaussian, Mat]:
     """
     Make one Kalman Smoother step
+
+
+    TODO: Update docstring
 
     Parameters
     ----------
@@ -200,7 +186,8 @@ def smoother_step(KF: SimpleKF, x: Vec, P: Cov, x_n: Vec, P_n: Cov) -> tuple[Vec
         Smoothed state estimate for one timestep back, i.e. x^{n}_{t-1} in eq.
         (6.47) in [1]
     P_n : Cov
-        Smoothed state covariance for one timestep back, i.e. P^{n}_{t-1} in eq. (6.48) in [1]
+        Smoothed state covariance for one timestep back, i.e. P^{n}_{t-1} in
+        eq. (6.48) in [1]
     J : Mat
         J_{t-1} in eq. (6.49) in [1]
 
@@ -217,104 +204,107 @@ def smoother_step(KF: SimpleKF, x: Vec, P: Cov, x_n: Vec, P_n: Cov) -> tuple[Vec
     New York. https://doi.org/10.1007/978-1-4419-7865-3.
 
     """
-    x_, P_ = KF.predict(x, P)
+    state_ = KF.predict(state)
 
-    J = np.linalg.solve(P_, KF.Phi @ P).T  # P * Phi^T * P_^{-1}; solve is better than inv
+    # P * Phi^T * P_^{-1}; solve is better than inv
+    J = np.linalg.solve(state_.P, KF.Phi @ state.P).T
 
-    x_n = x + J @ (x_n - x_)
-    P_n = P + J @ (P_n - P_) @ J.T
+    x = state.x + J @ (state_n.x - state_.x)
+    P = state.P + J @ (state_n.P - state_.P) @ J.T
+    state_n = Gaussian(x, P)
 
-    return x_n, P_n, J
+    return state_n, J
 
 
-def estimate_adjacent_states_covariances(
-    Phi: Mat, Q: Cov, A: Mat, R: Cov, P: list[Cov], J: list[Mat]
+def estimate_adj_state_cross_covariances(
+    Phi: Mat, Q: Cov, H: Mat, R: Cov, all_P: list[Cov], J: list[Mat]
 ) -> list[Mat]:
     # estimate P^n_{t-1,t-2}
-    n = len(P) - 1
-    P_ = Phi @ P[n - 1] @ Phi.T + Q  # P^{n-1}_n
-    K = np.linalg.solve(A @ P_ @ A.T + R, A @ P[n]).T  # K_n, eq. (6.23) in [1]
-    P_nt: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^n_{t-1, t-2}
-    P_nt[n - 1] = (np.eye(K.shape[0]) - K @ A) @ Phi @ P[n - 1]  # P^n_{n, n-1}, eq.(6.55) in [1]
+    n = len(all_P) - 1
+    m_sen = H.shape[0]
+    P_ = Phi @ all_P[n - 1] @ Phi.T + Q  # P^{n-1}_n
+    K = np.linalg.solve(H @ P_ @ H.T + R, H @ all_P[n]).T  # K_n, eq. (6.23) in [1]
+    P_nt: list[Cov] = [np.zeros_like(P_)] * (n + 1)  # pyright: ignore  # P^n_{t-1, t-2}
+    P_nt[n - 1] = (np.eye(m_sen) - K @ H) @ Phi @ all_P[n - 1]  # P^n_{n, n-1}, eq.(6.55) in [1]
 
     for t in range(n, 1, -1):
         P_nt[t - 2] = (
-            P[t - 1] @ J[t - 2].T + J[t - 1] @ (P_nt[t - 1] - Phi @ P[t - 1]) @ J[t - 2].T
+            all_P[t - 1] @ J[t - 2].T + J[t - 1] @ (P_nt[t - 1] - Phi @ all_P[t - 1]) @ J[t - 2].T
         )
+        assert np.linalg.norm(P_nt[t - 2]) < 1e10
     return P_nt
 
 
-def compute_aux_em_matrices(x_n: list[Vec], P_n: list[Cov], P_nt: list[Mat]) -> dict[str, Mat]:
-    n = len(x_n) - 1
-    S = {"11": np.zeros_like(P_n[0]), "10": np.zeros_like(P_nt[0]), "00": np.zeros_like(P_n[0])}
+def compute_aux_em_matrices(states_n: list[Gaussian], P_nt: list[Mat]) -> dict[str, Mat]:
+    n = len(states_n) - 1
+    S = {
+        "11": np.zeros_like(states_n[0].P),
+        "10": np.zeros_like(P_nt[0]),
+        "00": np.zeros_like(states_n[0].P),
+    }
     for t in range(1, n + 1):
-        S["11"] += x_n[t] @ x_n[t].T + P_n[t]
-        S["10"] += x_n[t] @ x_n[t - 1].T + P_nt[t - 1]
-        S["00"] += x_n[t - 1] @ x_n[t - 1].T + P_n[t - 1]
+        S["11"] += states_n[t].x @ states_n[t].x.T + states_n[t].P
+        S["10"] += states_n[t].x @ states_n[t - 1].x.T + P_nt[t - 1]
+        S["00"] += states_n[t - 1].x @ states_n[t - 1].x.T + states_n[t - 1].P
     return S
 
 
-def phi_full_upd(Phi: Mat, S: dict[str, Mat]) -> Mat:
-    return np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
-
-
-def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: PositiveInt) -> tuple[float, float, float, float]:
-    A = S["00"][0, 0] + S["00"][1, 1]
-    B = S["10"][0, 0] + S["10"][1, 1]
-    C = S["10"][1, 0] - S["10"][0, 1]
-    D = S["11"][0, 0] + S["11"][1, 1]
-    f = max(C / B, 0)
+def params_update(S: dict[str, Mat], KF: SossAugSmoother, n: PositiveInt) -> KFParams:
+    A, B = S["00"][0, 0] + S["00"][1, 1], S["10"][0, 0] + S["10"][1, 1]
+    C, D = S["10"][1, 0] - S["10"][0, 1], S["11"][0, 0] + S["11"][1, 1]
+    # Phi = KF.KF.Phi.copy()
+    freq_rad = max(C / B, 0)
     Amp = np.sqrt(B**2 + C**2) / A
+    # mp = MatsudaParams(A=Amp, freq_hz=freq_rad / 2 / np.pi * KF.mp.sr, sr=KF.mp.sr)
+    # Phi_small = complex2mat(mp.Phi)
+    # Phi[:2, :2] = Phi_small
     q_s = np.sqrt(max(0.5 * (D - Amp**2 * A) / n, 1e-6))
-    r_s = np.sqrt(
-        (S["11"][2, 2] - 2 * S["10"][2, :] @ Phi.T[:, 2] + (Phi[2, :] @ S["00"] @ Phi.T[:, 2])) / n
-    )
-    return f, Amp, q_s, r_s
+    # r_s_2 = S["11"][2, 2] - 2 * S["10"][2, :] @ Phi.T[:, 2] + Phi[2, :] @ S["00"] @ Phi.T[:, 2]
+    r_s_2 = S["11"][2, 2] - (S["10"] @ np.linalg.solve(S["00"], S["10"].T))[2, 2]
+    # assert r_s_2 >= 0
+    r_s = np.sqrt(max(r_s_2 / n, 1e-6))
+    print(f"{Amp=}, f={freq_rad/ 2/ np.pi * 500}, {q_s=}, {r_s=}")
+    return KFParams(Amp, freq_rad, q_s, r_s)
 
 
-def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
-    return (S["11"] - S["10"] @ Phi_.T - Phi_ @ S["10"].T + Phi_ @ S["00"] @ Phi_.T) / n
+def wrapper(x, sr, meas, psi, A, f):
+    # A = x[0]
+    # f = x[1]
+    q_s = x[0]
+    r_s = x[1]
+    mp = MatsudaParams(A, f, sr)
+    y = normalize_measurement_dimensions(meas)
+
+    # kfp.r_s = 1
+    KF = SossAugSmoother(mp, q_s, psi, r_s, lambda_=0)
+    states_fp = KF.KF.apply(y)
+    return compute_kf_nll(y, states_fp, KF.KF)
 
 
-def r_full_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
-    n, sensors_cnt = len(x_n) - 1, A.shape[0]
-    res = np.zeros((sensors_cnt, sensors_cnt))
-    for t in range(1, n + 1):
-        tmp = y[t] - A @ x_n[t]
-        res += tmp @ tmp.T + A @ P_n[t] @ A.T
-    return res / n
-
-
-def r_null_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
-    return np.zeros_like(R)
-
-
-def compute_kf_negloglikelihood(
-    y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF
-) -> tuple[float, float]:
+def compute_kf_nll(y: list[Vec], states: list[Gaussian], KF: SimpleKF) -> float:
     n = len(y) - 1
     negloglikelihood = 0
     r_2: float = 0
     for t in range(1, n + 1):
-        x_, P_ = KF.predict(x[t], P[t])
-        eps = y[t] - KF.H @ x_
+        state_ = KF.predict(states[t])
+        eps = y[t] - KF.H @ state_.x
         r_2 += float(eps @ eps.T)
-        Sigma = KF.H @ P_ @ KF.H.T + KF.R
+        Sigma = KF.H @ state_.P @ KF.H.T + KF.R
         tmp = np.linalg.solve(Sigma, eps)  # Sigma inversion
         negloglikelihood += 0.5 * (np.log(np.linalg.det(Sigma)) + eps.T @ tmp)
-    return negloglikelihood, r_2
+    return float(negloglikelihood)
 
 
 def theor_psd_ar(
-    f: PositiveFloat, s: PositiveFloat, ar_coef: Collection[float], sr: PositiveFloat
+    f: PositiveFloat, s: NonNegativeFloat, ar_coef: Collection[float], sr: PositiveFloat
 ) -> PositiveFloat:
     denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
     return check_positive_float(s**2 / np.abs(denom) ** 2)
 
 
-def theor_psd_mk_mar(f: PositiveFloat, s: PositiveFloat, mp: MatsudaParams) -> PositiveFloat:
+def theor_psd_mk_mar(f: PositiveFloat, s: NonNegativeFloat, mp: MatsudaParams) -> PositiveFloat:
     """Theoretical PSD for Matsuda-Komaki multivariate AR process"""
-    phi = 2 * np.pi * mp.freq / mp.sr
+    phi = 2 * np.pi * mp.freq_hz / mp.sr
     psi = 2 * np.pi * f / mp.sr
     A = mp.A
 
@@ -334,14 +324,16 @@ def get_psd_val_from_est(f: PositiveFloat, freqs: np.ndarray, psd: np.ndarray) -
 def estimate_sigmas_squared(
     basis_psd_funcs: Sequence[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[PositiveFloat]
 ) -> list[PositiveFloat]:
-    A = []
-    b = [1] * len(freqs)
+    A: list[list[float]] = []
+    b = [1.0] * len(freqs)
     for row, f in enumerate(freqs):
         b_ = data_psd_func(f)
         A.append([])
         for func in basis_psd_funcs:
             A[row].append(func(f) / b_)
-    return [check_positive_float(s) for s in np.linalg.lstsq(np.array(A), np.array(b))[0]]
+    return [
+        check_positive_float(s) for s in np.linalg.lstsq(np.array(A), np.array(b), rcond=None)[0]
+    ]
 
 
 if __name__ == "__main__":
