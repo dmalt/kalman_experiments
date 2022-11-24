@@ -88,7 +88,8 @@ def fit_kf_parameters(
         # q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
         # r_s = np.sqrt(Q[2, 2])
         # psi = Phi[2, -len(KF.psi) : len(Phi)]
-        KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
+        # KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
+        KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
         # print(KF.M, KF.q_s, KF.r_s)
         KF.KF.x = x_0
         KF.KF.P = P_0
@@ -118,7 +119,7 @@ def em_step(
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
-    # print("nll, r2 =", compute_kf_negloglikelihood(y, x, P, KF))
+    print("nll = ", compute_kf_negloglikelihood(y, x, P, KF))
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
@@ -234,8 +235,14 @@ def estimate_adjacent_states_covariances(
 
 def compute_aux_em_matrices(x_n: list[Vec], P_n: list[Cov], P_nt: list[Mat]) -> dict[str, Mat]:
     n = len(x_n) - 1
-    S = {"11": np.zeros_like(P_n[0]), "10": np.zeros_like(P_nt[0]), "00": np.zeros_like(P_n[0])}
+    S = {
+        "11": np.zeros_like(P_n[0], dtype=np.longdouble),
+        "10": np.zeros_like(P_nt[0], dtype=np.longdouble),
+        "00": np.zeros_like(P_n[0], dtype=np.longdouble),
+    }
     for t in range(1, n + 1):
+        # if not t % 100:
+        #     print(np.linalg.norm(x_n[t] @ x_n[t].T + P_n[t]))
         S["11"] += x_n[t] @ x_n[t].T + P_n[t]
         S["10"] += x_n[t] @ x_n[t - 1].T + P_nt[t - 1]
         S["00"] += x_n[t - 1] @ x_n[t - 1].T + P_n[t - 1]
@@ -257,7 +264,9 @@ def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float,
     r_s = np.sqrt(
         (S["11"][2, 2] - 2 * S["10"][2, :] @ Phi.T[:, 2] + (Phi[2, :] @ S["00"] @ Phi.T[:, 2])) / n
     )
-    return f, Amp, q_s, r_s
+    print(A, B, C, D)
+    print(f"{Amp=}, f={f / 2 / np.pi * 1000}, {q_s=}, {r_s=}")
+    return float(f), float(Amp), float(q_s), float(r_s)
 
 
 def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
@@ -290,7 +299,7 @@ def compute_kf_negloglikelihood(
         Sigma = KF.H @ P_ @ KF.H.T + KF.R
         tmp = np.linalg.solve(Sigma, eps)  # Sigma inversion
         negloglikelihood += 0.5 * (np.log(np.linalg.det(Sigma)) + eps.T @ tmp)
-    return negloglikelihood, r_2
+    return float(negloglikelihood)
 
 
 def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
@@ -332,4 +341,5 @@ def estimate_sigmas(
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()
