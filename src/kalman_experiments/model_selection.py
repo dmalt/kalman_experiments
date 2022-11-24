@@ -75,22 +75,11 @@ def fit_kf_parameters(
     prev_freq = KF.M.freq
     model_error = np.inf
     for _ in trange(n_iter, desc="Fitting KF parameters"):
-        # Phi, Q, R, x_0, P_0 = em_step(meas, KF.KF, phi_full_upd, q_full_upd, r_full_upd)
-        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF, phi_osc_only_upd)
-        # freq = np.arctan((Phi[1, 0] - Phi[0, 1]) / (Phi[0, 0] + Phi[1, 1])) / 2 / np.pi * sr
-        # amp = min(
-        #     np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4), 1 - AMP_EPS
-        # )
+        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF)
         amp = min(amp, 1 - AMP_EPS)
         freq *= sr / (2 * np.pi)
 
-        # amp = np.sqrt(((Phi[1, 0] - Phi[0, 1]) ** 2 + (Phi[0, 0] + Phi[1, 1]) ** 2) / 4)
-        # q_s = np.sqrt((Q[0, 0] + Q[1, 1]) / 2)
-        # r_s = np.sqrt(Q[2, 2])
-        # psi = Phi[2, -len(KF.psi) : len(Phi)]
-        # KF = PerturbedP1DMatsudaKF(MatsudaParams(amp, freq, sr), q_s, KF.psi, r_s, KF.lambda_)
         KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
-        # print(KF.M, KF.q_s, KF.r_s)
         KF.KF.x = x_0
         KF.KF.P = P_0
         model_error = abs(freq - prev_freq)
@@ -102,29 +91,19 @@ def fit_kf_parameters(
     return KF
 
 
-PhiUpdateStrategy = Callable[[Mat, dict[str, Mat]], Mat]
-QUpdateStrategy = Callable[[Cov, dict[str, Mat], Mat, int], Cov]
-RUpdateStrategy = Callable[[Cov, Mat, list[Vec], list[Cov], list[Vec]], Cov]
-
-
-def em_step(
-    meas: Vec | Vec1D,
-    KF: SimpleKF,
-    phi_upd: PhiUpdateStrategy,
-) -> KFParams:
+def em_step(meas: Vec | Vec1D, KF: SimpleKF) -> KFParams:
     n = len(meas)
     Phi, A, Q, R = KF.Phi, KF.H, KF.Q, KF.R
     assert n, "Measurements must be nonempty"
-    # assert meas.ndim == 2, "Measurements must be a column vector of shape (n_meas, 1)"
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
-    print("nll = ", compute_kf_negloglikelihood(y, x, P, KF))
+    print("nll = ", compute_kf_nll(y, x, P, KF))
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
     S = compute_aux_em_matrices(x_n, P_n, P_nt)
-    freq, Amp, q_s, r_s = phi_upd(S, Phi, n)
+    freq, Amp, q_s, r_s = params_update(S, Phi, n)
     x_0_new = x_n[0]
     P_0_new = P_n[0]
 
@@ -241,19 +220,13 @@ def compute_aux_em_matrices(x_n: list[Vec], P_n: list[Cov], P_nt: list[Mat]) -> 
         "00": np.zeros_like(P_n[0], dtype=np.longdouble),
     }
     for t in range(1, n + 1):
-        # if not t % 100:
-        #     print(np.linalg.norm(x_n[t] @ x_n[t].T + P_n[t]))
         S["11"] += x_n[t] @ x_n[t].T + P_n[t]
         S["10"] += x_n[t] @ x_n[t - 1].T + P_nt[t - 1]
         S["00"] += x_n[t - 1] @ x_n[t - 1].T + P_n[t - 1]
     return S
 
 
-def phi_full_upd(Phi: Mat, S: dict[str, Mat]) -> Mat:
-    return np.linalg.solve(S["00"], S["10"].T).T  # S_10 * S_["00"]^{-1}
-
-
-def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float, float, float]:
+def params_update(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float, float, float]:
     A = S["00"][0, 0] + S["00"][1, 1]
     B = S["10"][0, 0] + S["10"][1, 1]
     C = S["10"][1, 0] - S["10"][0, 1]
@@ -264,31 +237,10 @@ def phi_osc_only_upd(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float,
     r_s = np.sqrt(
         (S["11"][2, 2] - 2 * S["10"][2, :] @ Phi.T[:, 2] + (Phi[2, :] @ S["00"] @ Phi.T[:, 2])) / n
     )
-    print(A, B, C, D)
-    print(f"{Amp=}, f={f / 2 / np.pi * 1000}, {q_s=}, {r_s=}")
     return float(f), float(Amp), float(q_s), float(r_s)
 
 
-def q_full_upd(Q: Cov, S: dict[str, Mat], Phi_: Mat, n: int) -> Cov:
-    return (S["11"] - S["10"] @ Phi_.T - Phi_ @ S["10"].T + Phi_ @ S["00"] @ Phi_.T) / n
-
-
-def r_full_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
-    n, sensors_cnt = len(x_n) - 1, A.shape[0]
-    res = np.zeros((sensors_cnt, sensors_cnt))
-    for t in range(1, n + 1):
-        tmp = y[t] - A @ x_n[t]
-        res += tmp @ tmp.T + A @ P_n[t] @ A.T
-    return res / n
-
-
-def r_null_upd(R: Cov, A: Mat, x_n: list[Vec], P_n: list[Cov], y: list[Vec]) -> Cov:
-    return np.zeros_like(R)
-
-
-def compute_kf_negloglikelihood(
-    y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF
-) -> tuple[float, float]:
+def compute_kf_nll(y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF) -> float:
     n = len(y) - 1
     negloglikelihood = 0
     r_2: float = 0
