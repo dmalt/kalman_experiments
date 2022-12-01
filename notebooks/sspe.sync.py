@@ -30,12 +30,13 @@ NOISE_SIGMA_GT = 1
 A_GT = 0.99
 ALPHA = 1.5
 NOISE_AR_ORDER = 1000
-sim = {}
-sim["sines_in_white"] = SSPE.gen_sine_w_white(DURATION, SRATE)
-sim["sines_in_pink"] = SSPE.gen_sine_w_pink(DURATION, SRATE)
-sim["filtered_pink"] = SSPE.gen_filt_pink_noise_w_added_pink_noise(DURATION, SRATE)
-sim["state_space_model_white"] = SSPE.gen_state_space_model_white(DURATION, SRATE)
-sim["state_space_model_pink"] = SSPE.gen_state_space_model_pink(DURATION, SRATE)
+sim = dict(
+    sines_in_white=SSPE.gen_sine_w_white(DURATION, SRATE),
+    sines_in_pink=SSPE.gen_sine_w_pink(DURATION, SRATE),
+    filtered_pink=SSPE.gen_filt_pink_noise_w_added_pink_noise(DURATION, SRATE),
+    state_space_model_white=SSPE.gen_state_space_model_white(DURATION, SRATE),
+    state_space_model_pink=SSPE.gen_state_space_model_pink(DURATION, SRATE),
+)
 
 
 # %%
@@ -64,8 +65,8 @@ params_pink = {}
 params_white = {}
 
 for k, s in sim.items():
-#     if k != "sines_in_pink":
-#         continue
+    #     if k != "sines_in_pink":
+    #         continue
     print(f"{k:-^80}")
     train_data = s.data[:TRAIN_LIMIT_SAMP]
 
@@ -100,8 +101,8 @@ for k, s in sim.items():
     q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
     q_s_est_white, r_s_est_white = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
     r_s_est_white = max(r_s_est_white, 0.2)
-#     r_s_est_white = max(r_s_est_white, 0.3)
-#     q_s_est_white = 0.02
+    #     r_s_est_white = max(r_s_est_white, 0.3)
+    #     q_s_est_white = 0.02
     kf_white = PerturbedP1DMatsudaKF(
         mp, q_s=q_s_est_white, psi=psi_white, r_s=r_s_est_white, lambda_=1e-6
     )
@@ -121,7 +122,7 @@ for k, s in sim.items():
 
         filtered_pink = apply_kf(kf_pink_fit, data_chunk, delay=0)
         filtered_white = apply_kf(kf_white_fit, data_chunk, delay=0)
-#         filtered_white = apply_kf(kf_white, data_chunk, delay=0)
+        #         filtered_white = apply_kf(kf_white, data_chunk, delay=0)
 
         cstd_pink[k].append(circstd(np.angle(filtered_pink) - phases_chunk) * 180 / np.pi)
         cstd_white[k].append(circstd(np.angle(filtered_white) - phases_chunk) * 180 / np.pi)
@@ -175,12 +176,16 @@ err = "Error"
 df_pink = pd.DataFrame(cstd_pink)
 df_pink = df_pink.T.unstack().reset_index()
 df_pink["algorithm"] = "pink kf"
-df_pink = df_pink.rename(columns={"level_0": "trial_num", "level_1": "simulation", 0: "circular std"})
+df_pink = df_pink.rename(
+    columns={"level_0": "trial_num", "level_1": "simulation", 0: "circular std"}
+)
 
 df_white = pd.DataFrame(cstd_white)
 df_white = df_white.T.unstack().reset_index()
 df_white["algorithm"] = "white kf"
-df_white = df_white.rename(columns={"level_0": "trial_num", "level_1": "simulation", 0: "circular std"})
+df_white = df_white.rename(
+    columns={"level_0": "trial_num", "level_1": "simulation", 0: "circular std"}
+)
 
 df = pd.concat([df_pink, df_white])
 
@@ -202,4 +207,4 @@ df
 # %%
 df.to_csv("metrics.csv", index=False)
 # %%
-df.groupby(('simulation', 'algoritm')).mean()
+df.groupby(("simulation", "algoritm")).mean()
