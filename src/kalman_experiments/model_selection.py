@@ -32,7 +32,7 @@ Fit params white noise
 >>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
 >>> kf = PerturbedP1DMatsudaKF(MatsudaParams(A=0.999, freq=1, sr=1000), q_s=2, psi=np.zeros(0), r_s=5, lambda_=0)
 >>> kf = fit_kf_parameters(meas, kf)
->>> print(kf.M)
+>>> print(kf.mp)
 
 Fit params pink noise
 >>> from kalman_experiments.model_selection import fit_kf_parameters
@@ -73,8 +73,8 @@ def fit_kf_parameters(
 ) -> PerturbedP1DMatsudaKF:
 
     AMP_EPS = 1e-4
-    sr = KF.M.sr
-    prev_freq = KF.M.freq
+    sr = KF.mp.sr
+    prev_freq = KF.mp.freq
     model_error = np.inf
     for _ in (pb := trange(n_iter, desc="Fitting KF parameters")):
         amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF, pb)
@@ -82,7 +82,7 @@ def fit_kf_parameters(
         freq *= sr / (2 * np.pi)
 
         mp = MatsudaParams(amp, freq, sr)
-        # KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
+        # KF = PerturbedP1DMatsudaKF(KF.mp, q_s, KF.psi, r_s, KF.lambda_)
         KF = PerturbedP1DMatsudaKF(mp, q_s, KF.psi, r_s, KF.lambda_)
         KF.KF.x = x_0
         KF.KF.P = P_0
@@ -269,7 +269,7 @@ def nll_opt_wrapper(x, meas, sr, psi, lambda_):
     r_s = x[3]
     y = normalize_measurement_dimensions(meas)
     mp = MatsudaParams(A, f, sr)
-    # KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
+    # KF = PerturbedP1DMatsudaKF(KF.mp, q_s, KF.psi, r_s, KF.lambda_)
     KF = PerturbedP1DMatsudaKF(mp, q_s, psi, r_s, lambda_)
     x, P = apply_kf(KF.KF, y)
     return compute_kf_nll(y, x, P, KF.KF)
