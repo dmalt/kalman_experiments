@@ -133,7 +133,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     See also
     --------
-    gen_ar_noise_coefficients : generate psi
+    kalman_experiments.models.gen_ar_noise_coefficients : generate psi
 
     """
 
