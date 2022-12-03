@@ -50,9 +50,11 @@ Fit params pink noise
 from typing import Callable, Collection, NamedTuple, Sequence
 
 import numpy as np
+from scipy.optimize import nnls
 from tqdm import trange
 
-from kalman_experiments.kalman import PerturbedP1DMatsudaKF, SimpleKF
+from kalman_experiments.kalman.core import SimpleKF
+from kalman_experiments.kalman.wrappers import PerturbedP1DMatsudaKF
 from kalman_experiments.models import MatsudaParams
 from kalman_experiments.numpy_types import Cov, Mat, Vec, Vec1D
 
@@ -74,12 +76,14 @@ def fit_kf_parameters(
     sr = KF.M.sr
     prev_freq = KF.M.freq
     model_error = np.inf
-    for _ in trange(n_iter, desc="Fitting KF parameters"):
-        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF)
+    for _ in (pb := trange(n_iter, desc="Fitting KF parameters")):
+        amp, freq, q_s, r_s, x_0, P_0 = em_step(meas, KF.KF, pb)
         amp = min(amp, 1 - AMP_EPS)
         freq *= sr / (2 * np.pi)
 
-        KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
+        mp = MatsudaParams(amp, freq, sr)
+        # KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
+        KF = PerturbedP1DMatsudaKF(mp, q_s, KF.psi, r_s, KF.lambda_)
         KF.KF.x = x_0
         KF.KF.P = P_0
         model_error = abs(freq - prev_freq)
@@ -91,19 +95,23 @@ def fit_kf_parameters(
     return KF
 
 
-def em_step(meas: Vec | Vec1D, KF: SimpleKF) -> KFParams:
+def em_step(meas: Vec | Vec1D, KF: SimpleKF, pb) -> KFParams:
     n = len(meas)
     Phi, A, Q, R = KF.Phi, KF.H, KF.Q, KF.R
     assert n, "Measurements must be nonempty"
 
     y = normalize_measurement_dimensions(meas)
     x, P = apply_kf(KF, y)
-    print("nll = ", compute_kf_nll(y, x, P, KF))
+    nll = compute_kf_nll(y, x, P, KF)
     x_n, P_n, J = apply_kalman_interval_smoother(KF, x, P)
     P_nt = estimate_adjacent_states_covariances(Phi, Q, A, R, P, J)
 
     S = compute_aux_em_matrices(x_n, P_n, P_nt)
     freq, Amp, q_s, r_s = params_update(S, Phi, n)
+    pb.set_description(
+        f"Fitting KF parameters: nll={nll:.2f},"
+        f"f={freq*1000/2/np.pi:.2f}, A={Amp:.4f}, {q_s:.2f}, {r_s:.2f}"
+    )
     x_0_new = x_n[0]
     P_0_new = P_n[0]
 
@@ -254,6 +262,19 @@ def compute_kf_nll(y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF) -> fl
     return float(negloglikelihood)
 
 
+def nll_opt_wrapper(x, meas, sr, psi, lambda_):
+    A = x[0]
+    f = x[1]
+    q_s = x[2]
+    r_s = x[3]
+    y = normalize_measurement_dimensions(meas)
+    mp = MatsudaParams(A, f, sr)
+    # KF = PerturbedP1DMatsudaKF(KF.M, q_s, KF.psi, r_s, KF.lambda_)
+    KF = PerturbedP1DMatsudaKF(mp, q_s, psi, r_s, lambda_)
+    x, P = apply_kf(KF.KF, y)
+    return compute_kf_nll(y, x, P, KF.KF)
+
+
 def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
     denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
     return s**2 / np.abs(denom) ** 2
@@ -274,12 +295,18 @@ PsdFunc = Callable[[float], float]
 
 
 def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> float:
+    """
+    Utility function to get estimated psd value by frequency
+
+    If using welch for psd estimation, make sure it was called with
+    `return_onesided=True` (default)
+    """
     ind = np.argmin((freqs - f) ** 2)
-    return psd[ind]
+    return psd[ind] / 2
 
 
 def estimate_sigmas(
-    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float]
+    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float], eps=1e-6
 ) -> np.ndarray:
     A = []
     b = [1] * len(freqs)
@@ -288,7 +315,9 @@ def estimate_sigmas(
         A.append([])
         for func in basis_psd_funcs:
             A[row].append(func(f) / b_)
-    return np.linalg.lstsq(np.array(A), np.array(b))[0]
+    # print(np.linalg.cond(np.matrix(A)))
+    # b = np.array(b) - np.array(A) @ np.ones_like(b) * eps
+    return nnls(np.array(A), np.array(b))[0]
 
 
 if __name__ == "__main__":
