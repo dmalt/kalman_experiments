@@ -4,3 +4,4 @@ __pycache__
 .ipynb_checkpoints
 *.npz
 .mypy_cache
+metrics.csv
