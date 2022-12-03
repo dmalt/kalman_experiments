@@ -4,7 +4,7 @@ import numpy as np
 from ..numpy_types import Cov, Mat, Vec
 
 
-class DifferenceColoredKF:
+class DifferenceKF:
     """
     'Alternative approach' implementation for KF with colored noise from [1]
 

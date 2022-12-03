@@ -29,7 +29,7 @@ import numpy as np
 from ..complex import complex2mat, vec2complex
 from ..models import MatsudaParams
 from ..numpy_types import Cov, Vec, Vec1D
-from .core import DifferenceColoredKF, PerturbedPKF
+from .core import DifferenceKF, PerturbedPKF
 
 
 class Gaussian(NamedTuple):
@@ -65,7 +65,7 @@ class Difference1DMatsudaKF(OneDimKF):
 
     Using Matsuda's model for oscillation prediction, see [1], and a difference
     scheme to incorporate AR(1) 1/f^a measurement noise, see [2]. Wraps
-    DifferenceColoredKF to avoid trouble with properly arranging matrix and
+    DifferenceKF to avoid trouble with properly arranging matrix and
     vector shapes.
 
     Parameters
@@ -100,7 +100,7 @@ class Difference1DMatsudaKF(OneDimKF):
         H = np.array([[1, 0]])
         Psi = np.array([[psi]])
         R = np.array([[r_s**2]])
-        self.KF = DifferenceColoredKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
+        self.KF = DifferenceKF(Phi=Phi, Q=Q, H=H, Psi=Psi, R=R)
 
 
 class PerturbedP1DMatsudaKF(OneDimKF):
