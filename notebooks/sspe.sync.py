@@ -22,7 +22,7 @@ from kalman_experiments.models import MatsudaParams, gen_ar_noise_coefficients
 # %%
 # Generate data
 SRATE = 1000
-DURATION = 10_000
+DURATION = 10_00
 CHUNK_NSAMP = int(10 * SRATE)
 FREQ_GT = 6
 SIGNAL_SIGMA_GT = np.sqrt(10)
@@ -52,11 +52,33 @@ plt.show()
 
 
 # %%
-
-
 TRAIN_LIMIT_SAMP = 5000
 KF_NOISE_ORDER = 30
 NPERSEG = 1000
+
+
+def fit_parameters(
+    train_data: np.ndarray,
+    mp_init: MatsudaParams,
+    noise_alpha: float,
+    noise_order: int,
+    nperseg: int,
+) -> PerturbedP1DMatsudaKF:
+    freqs, psd = welch(train_data, fs=mp_init.sr, nperseg=nperseg)
+    est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd / 2)
+    psi = gen_ar_noise_coefficients(noise_alpha, noise_order)
+    ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
+    mar_psd_func = partial(theor_psd_mk_mar, s=1, mp=mp_init)
+
+    q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
+    q_s_est, r_s_est = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
+    r_s_est, q_s_est = max(r_s_est, 0.0001), max(q_s_est, 0.0001)
+    print(f"{q_s_est=:.2f}, {r_s_est=:.2f}")
+
+    psi = gen_ar_noise_coefficients(alpha=noise_alpha, order=noise_order)
+    kf = PerturbedP1DMatsudaKF(mp_init, q_s=q_s_est, psi=psi, r_s=r_s_est)
+    return fit_kf_parameters(train_data, kf, tol=1e-3)
+
 
 fit_freqs = [6, 450]
 cstd_pink = {}
@@ -65,53 +87,30 @@ params_pink = {}
 params_white = {}
 
 for k, s in sim.items():
-    #     if k != "sines_in_pink":
-    #         continue
+    # if k != "sines_in_pink":
+    #     continue
+
+    if k != "filtered_pink":
+        continue
     print(f"{k:-^80}")
     train_data = s.data[:TRAIN_LIMIT_SAMP]
 
-    freqs, psd = welch(train_data, fs=SRATE, nperseg=NPERSEG)
-    est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd / 2)
-
     # pink noise
+    A_fit = 0.99
     if k.startswith("sines"):
-        A_fit = 0.9999
+        A_fit = 0.99999
     elif k.startswith("filtered"):
-        A_fit = 0.9999
-    else:
-        A_fit = 0.99
-    mp = MatsudaParams(A=A_fit, freq=FREQ_GT, sr=SRATE)
-    mar_psd_func = partial(theor_psd_mk_mar, s=1, mp=mp)
+        A_fit = 0.999
+    alpha, order = (ALPHA, KF_NOISE_ORDER) if k.endswith("pink") else (0, 1)
 
-    if k.endswith("pink"):
-        psi_pink = gen_ar_noise_coefficients(alpha=ALPHA, order=KF_NOISE_ORDER)
-    else:
-        psi_pink = gen_ar_noise_coefficients(alpha=0, order=1)
-    ar_psd_func = partial(theor_psd_ar, ar_coef=psi_pink, sr=SRATE, s=1)
+    mp_init = MatsudaParams(A_fit, freq=FREQ_GT, sr=SRATE)
 
-    q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
-    q_s_est_pink, r_s_est_pink = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
-    r_s_est_pink = max(r_s_est_pink, 0.2)
-    kf_pink = PerturbedP1DMatsudaKF(
-        mp, q_s=q_s_est_pink, psi=psi_pink, r_s=r_s_est_pink, lambda_=1e-6
-    )
-
-    psi_white = gen_ar_noise_coefficients(alpha=0, order=1)
-    ar_psd_func = partial(theor_psd_ar, ar_coef=psi_white, sr=SRATE, s=1)
-    q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
-    q_s_est_white, r_s_est_white = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
-    r_s_est_white = max(r_s_est_white, 0.2)
-    #     r_s_est_white = max(r_s_est_white, 0.3)
-    #     q_s_est_white = 0.02
-    kf_white = PerturbedP1DMatsudaKF(
-        mp, q_s=q_s_est_white, psi=psi_white, r_s=r_s_est_white, lambda_=1e-6
-    )
-    print(f"{q_s_est_pink=:.2f}, {r_s_est_pink=:.2f}")
-    print(f"{q_s_est_white=:.2f}, {r_s_est_white=:.2f}")
-
-    kf_pink_fit = fit_kf_parameters(train_data, kf_pink, tol=1e-3)
+    kf_pink_fit = fit_parameters(train_data, mp_init, alpha, order, nperseg=NPERSEG)
     params_pink[k] = (kf_pink_fit.M.A, kf_pink_fit.M.freq, kf_pink_fit.q_s, kf_pink_fit.r_s)
-    kf_white_fit = fit_kf_parameters(train_data, kf_white, tol=1e-3)
+
+    kf_white_fit = fit_parameters(
+        train_data, mp_init, noise_alpha=0, noise_order=1, nperseg=NPERSEG
+    )
     params_white[k] = (kf_white_fit.M.A, kf_white_fit.M.freq, kf_white_fit.q_s, kf_white_fit.r_s)
 
     cstd_pink[k] = []
@@ -126,22 +125,10 @@ for k, s in sim.items():
 
         cstd_pink[k].append(circstd(np.angle(filtered_pink) - phases_chunk) * 180 / np.pi)
         cstd_white[k].append(circstd(np.angle(filtered_white) - phases_chunk) * 180 / np.pi)
-    print(np.mean(cstd_pink[k]))
-    print(np.std(cstd_pink[k]))
-    print(np.mean(cstd_white[k]))
-    print(np.std(cstd_white[k]))
 
-#         print(
-#             "circstd:",
-#             "pink=",
-#             round(np.mean(cstd_pink[k]), 2),
-#             "white=",
-#             round(np.mean(cstd_white[k]), 2),
-#         )
-
-
-# %%
-mp
+    print("circstd stats:")
+    print(f"pink:  mean={np.mean(cstd_pink[k]):.4f}, std={np.std(cstd_pink[k]):.4f}")
+    print(f"white: mean={np.mean(cstd_white[k]):.4f}, std={np.std(cstd_white[k]):.4f}")
 
 
 # %%
