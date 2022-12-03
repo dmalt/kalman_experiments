@@ -1,3 +1,25 @@
+"""
+Kalman filter implementations
+
+References
+----------
+.. [1] Matsuda, Takeru, and Fumiyasu Komaki. “Time Series Decomposition into
+Oscillation Components and Phase Estimation.” Neural Computation 29, no. 2
+(February 2017): 332–67. https://doi.org/10.1162/NECO_a_00916.
+
+.. [2] Chang, G. "On kalman filter for linear system with colored measurement
+noise". J Geod 88, 1163–1170, 2014 https://doi.org/10.1007/s00190-014-0751-7
+
+.. [3] Wang, Kedong, Yong Li, and Chris Rizos. “Practical Approaches to Kalman
+Filtering with Time-Correlated Measurement Errors.” IEEE Transactions on
+Aerospace and Electronic Systems 48, no. 2 (2012): 1669–81.
+https://doi.org/10.1109/TAES.2012.6178086.
+
+.. [4] Kasdin, N.J. “Discrete Simulation of Colored Noise and Stochastic
+Processes and 1/f/Sup /Spl Alpha// Power Law Noise Generation.” Proceedings of
+the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
+
+"""
 from abc import ABC
 from cmath import exp
 from typing import Any, NamedTuple
@@ -66,6 +88,10 @@ class Difference1DMatsudaKF(OneDimKF):
         Driving white noise standard deviation for the noise AR model
         (see cov for e_{k-1} in eq. (3) in [2])
 
+    See also
+    --------
+    gen_ar_noise_coefficients : generate psi
+
     """
 
     def __init__(self, A: float, f: float, sr: float, q_s: float, psi: float, r_s: float):
@@ -102,6 +128,10 @@ class PerturbedP1DMatsudaKF(OneDimKF):
         (see cov for e_{k-1} in eq. (3) in [2])
     lambda_ : float, default=1e-6
         Perturbation factor for P, see eq. (19) in [3]
+
+    See also
+    --------
+    gen_ar_noise_coefficients : generate psi
 
     """
 

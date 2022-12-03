@@ -1,3 +1,4 @@
+"""Vector general-case kalman filter implementations"""
 import numpy as np
 
 from ..numpy_types import Cov, Mat, Vec
@@ -5,7 +6,7 @@ from ..numpy_types import Cov, Mat, Vec
 
 class DifferenceColoredKF:
     """
-    'Alternative approach' implementation for KF with colored noise from [2]
+    'Alternative approach' implementation for KF with colored noise from [1]
 
     Parameters
     ----------
@@ -21,6 +22,11 @@ class DifferenceColoredKF:
     R : np.ndarray of shape(n_meas, n_meas)
         Driving noise covariance matrix for the noise AR model (cov for e_{k-1}
         in eq. (3) in [2])
+
+    References
+    ----------
+    .. [1] Chang, G. "On kalman filter for linear system with colored measurement
+    noise". J Geod 88, 1163–1170, 2014 https://doi.org/10.1007/s00190-014-0751-7
 
     """
 
@@ -76,7 +82,7 @@ class SimpleKF:
     """
     Standard Kalman filter implementation
 
-    Implementation follows eq. (2, 3) from [3]
+    Implementation follows eq. (2, 3) from [1]
 
     Parameters
     ----------
@@ -88,6 +94,13 @@ class SimpleKF:
         Matrix of the measurements model; maps state to measurements
     R : np.ndarray of shape(n_meas, n_meas)
         Driving noise covariance matrix for the noise AR model
+
+    References
+    ----------
+    .. [1] Wang, Kedong, Yong Li, and Chris Rizos. “Practical Approaches to Kalman
+    Filtering with Time-Correlated Measurement Errors.” IEEE Transactions on
+    Aerospace and Electronic Systems 48, no. 2 (2012): 1669–81.
+    https://doi.org/10.1109/TAES.2012.6178086.
 
     """
 
@@ -131,7 +144,7 @@ class SimpleKF:
 
 class PerturbedPKF(SimpleKF):
     """
-    Perturbed P implementation from [3] for KF with augmented state space
+    Perturbed P implementation from [1] for KF with augmented state space
 
     Parameters
     ----------
@@ -152,6 +165,13 @@ class PerturbedPKF(SimpleKF):
     R is added for possible regularization and normally must be a zero matrix,
     since the measurement errors are incorporated into the augmented state
     vector
+
+    References
+    ----------
+    .. [1] Wang, Kedong, Yong Li, and Chris Rizos. “Practical Approaches to Kalman
+    Filtering with Time-Correlated Measurement Errors.” IEEE Transactions on
+    Aerospace and Electronic Systems 48, no. 2 (2012): 1669–81.
+    https://doi.org/10.1109/TAES.2012.6178086.
 
     """
 
