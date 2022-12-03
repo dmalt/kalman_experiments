@@ -28,6 +28,8 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import filtfilt, firwin, hilbert
 
+from ..models import ArNoise, MatsudaParams, SingleRhythmModel, collect
+
 
 def make_pink_noise(alpha: float, n_samp: int, dt: float) -> npt.NDArray[np.floating]:
     """Given an alpha value for the 1/f^alpha produce data of length n_samp and at Fs = 1/dt"""
@@ -111,6 +113,39 @@ def gen_filt_pink_noise_w_added_pink_noise(duration_sec: float, Fs: float) -> Si
     gt_states: npt.NDArray[np.complex_] = hilbert(Vlo)  # pyright: ignore
     true_phase = np.angle(gt_states)
     return SimulationResults(data, gt_states, true_phase)
+
+
+def gen_state_space_model_white(duration_sec: float, Fs: float) -> SimulationResults:
+    SIGNAL_SIGMA_GT = np.sqrt(10)
+    NOISE_SIGMA_GT = 1
+
+    mp = MatsudaParams(A=0.99, freq=6, sr=Fs)
+    oscillation_model = SingleRhythmModel(mp, sigma=SIGNAL_SIGMA_GT)
+    gt_states = collect(oscillation_model, int(duration_sec * Fs))
+
+    noise = NOISE_SIGMA_GT * np.random.randn(int(duration_sec * Fs))
+    data: npt.NDArray[np.floating] = np.real(gt_states) + noise  # type: ignore
+    true_phase = np.angle(gt_states)  # type: ignore
+    return SimulationResults(data, gt_states, true_phase)  # type: ignore
+
+
+def gen_state_space_model_pink(duration_sec: float, Fs: float) -> SimulationResults:
+    SIGNAL_SIGMA_GT = np.sqrt(10)
+    NOISE_SIGMA_GT = 1
+    ALPHA = 1.5
+    NOISE_AR_ORDER = 1000
+
+    mp = MatsudaParams(A=0.99, freq=6, sr=Fs)
+    oscillation_model = SingleRhythmModel(mp, sigma=SIGNAL_SIGMA_GT)
+    gt_states = collect(oscillation_model, int(duration_sec * Fs))
+
+    x0 = np.random.rand(NOISE_AR_ORDER)
+    noise_model = ArNoise(x0=x0, alpha=ALPHA, order=NOISE_AR_ORDER, s=NOISE_SIGMA_GT)
+    noise = collect(noise_model, int(duration_sec * Fs))
+
+    data: npt.NDArray[np.floating] = np.real(gt_states) + noise  # type: ignore
+    true_phase = np.angle(gt_states)  # type: ignore
+    return SimulationResults(data, gt_states, true_phase)  # type: ignore
 
 
 def gen_two_sines(duration_sec: float, Fs: float, a2: float, f2: float) -> SimulationResults:
