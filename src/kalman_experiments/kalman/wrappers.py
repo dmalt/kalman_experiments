@@ -22,6 +22,7 @@ the IEEE 83, no. 5 (May 1995): 802–27. https://doi.org/10.1109/5.381848.
 """
 from abc import ABC
 from cmath import exp
+from dataclasses import astuple
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -94,7 +95,8 @@ class Difference1DMatsudaKF(OneDimKF):
 
     """
 
-    def __init__(self, A: float, f: float, sr: float, q_s: float, psi: float, r_s: float):
+    def __init__(self, mp: MatsudaParams, q_s: float, psi: float, r_s: float):
+        A, f, sr = astuple(mp)
         Phi = complex2mat(A * exp(2 * np.pi * f / sr * 1j))
         Q = np.eye(2) * q_s**2
         H = np.array([[1, 0]])
@@ -115,7 +117,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     Parameters
     ----------
-    M : MatsudaParams
+    mp : MatsudaParams
     q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
@@ -137,7 +139,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     def __init__(
         self,
-        M: MatsudaParams,
+        mp: MatsudaParams,
         q_s: float,
         psi: np.ndarray,
         r_s: float,
@@ -146,7 +148,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
         ns = len(psi)  # number of noise states
 
         Phi_blocks = [
-            [complex2mat(M.A * exp(2 * np.pi * M.freq / M.sr * 1j)), np.zeros([2, ns])],
+            [complex2mat(mp.A * exp(2 * np.pi * mp.freq / mp.sr * 1j)), np.zeros([2, ns])],
         ]
         if ns:
             Phi_blocks.append([np.zeros([1, 2]), psi[np.newaxis, :]])
@@ -166,7 +168,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
         else:
             R = np.array([[r_s**2]])
         self.KF = PerturbedPKF(Phi=Phi, Q=Q, H=H, R=R, lambda_=lambda_)
-        self.M = M
+        self.mp = mp
         self.psi = psi
         self.lambda_ = lambda_
         self.q_s = q_s
@@ -174,7 +176,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 
     def __repr__(self) -> str:
         return (
-            f"PerturbedP1DMatsudaKF(M={self.M}, q_s={self.q_s:.2f},"
+            f"PerturbedP1DMatsudaKF(mp={self.mp}, q_s={self.q_s:.2f},"
             f" psi={self.psi}, r_s={self.r_s:.2f}, lambda_={self.lambda_})"
         )
 
@@ -182,7 +184,7 @@ class PerturbedP1DMatsudaKF(OneDimKF):
 class PerturbedP1DMatsudaSmoother(OneDimKF):
     def __init__(
         self,
-        M: MatsudaParams,
+        mp: MatsudaParams,
         q_s: float,
         psi: np.ndarray,
         r_s: float,
@@ -195,7 +197,7 @@ class PerturbedP1DMatsudaSmoother(OneDimKF):
 
         Phi = np.block(
             [  # pyright: ignore
-                [complex2mat(M.Phi), np.zeros([2, ns + n_aug_x])],
+                [complex2mat(mp.Phi), np.zeros([2, ns + n_aug_x])],
                 [np.eye(n_aug_x), np.zeros([n_aug_x, 2 + ns])],
                 [np.zeros([1, n_aug_x + 2]), psi[np.newaxis, :]],
                 [np.zeros([ns - 1, n_aug_x + 2]), np.eye(ns - 1), np.zeros([ns - 1, 1])],
