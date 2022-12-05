@@ -28,7 +28,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import filtfilt, firwin, hilbert
 
-from ..models import ArNoise, MatsudaParams, SingleRhythmModel, collect
+from .models import ArNoise, MatsudaParams, SingleRhythmModel, collect
 
 
 def make_pink_noise(alpha: float, n_samp: int, dt: float) -> npt.NDArray[np.floating]:
