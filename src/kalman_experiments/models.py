@@ -7,7 +7,7 @@ from typing import Protocol
 import numpy as np
 from mne.io.brainvision.brainvision import read_raw_brainvision
 
-from kalman_experiments.numpy_types import Timeseries, Vec
+from kalman_experiments.numpy_types import Timeseries, Vec, Vec1D
 
 from .complex import complex_randn
 
@@ -41,7 +41,7 @@ class SingleRhythmModel:
         return self.x
 
 
-def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec:
+def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec1D:
     """
     Parameters
     ----------
