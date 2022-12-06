@@ -41,7 +41,8 @@ class DifferenceKF:
         self.R = R
 
         self.x = np.zeros((n_states, 1))  # posterior state (after update)
-        self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
+        # self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
+        self.P = np.eye(n_states)  # posterior cov (after update)
 
         self.y_prev = np.zeros((n_meas, 1))
 
