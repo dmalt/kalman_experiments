@@ -71,13 +71,7 @@ class Difference1DMatsudaKF(OneDimKF):
 
     Parameters
     ----------
-    A : float
-        A in Matsuda's step equation: x_next = A * exp(2 * pi * i * f / sr) * x + n
-    f : float
-        Oscillation frequency; f in Matsuda's step equation:
-        x_next = A * exp(2 * pi * i * f / sr) * x + n
-    sr : float
-        Sampling rate
+    mp : MatsudaParams
     q_s : float
         Standard deviation of model's driving noise (std(n) in the formula above),
         see eq. (1) in [2] and the explanation below
