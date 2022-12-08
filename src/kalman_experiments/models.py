@@ -59,7 +59,7 @@ def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec1D:
     """
     a: list[float] = [1]
     for k in range(1, order + 1):
-        a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1]
+        a.append((k - 1 - alpha / 2) * a[-1] / k)  # AR coefficients as in [1], eq. (116)
     return -np.array(a[1:])
 
 
