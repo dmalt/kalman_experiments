@@ -126,7 +126,7 @@ class SimpleKF:
         Sigma = self.H @ P_ @ self.H.T + self.R
         Pxn = P_ @ self.H.T
 
-        K = Pxn / Sigma
+        K = np.linalg.solve(Sigma, Pxn.T).T
         n = y - self.H @ x_
         self.x = x_ + K @ n
         self.P = P_ - K @ Sigma @ K.T
