@@ -10,7 +10,7 @@ Get smoothed data
 
 Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
+>>> gt_states = collect(SingleRhythmModel(mp, cont_sigma=1), n_samp=1000)
 >>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
 >>> kf = PerturbedP1DMatsudaKF(mp, q_s=1, psi=np.zeros(0), r_s=10, lambda_=0).KF
 >>> y = normalize_measurement_dimensions(meas)
@@ -25,11 +25,11 @@ Setup oscillatioins model and generate oscillatory signal
 Fit params white noise
 >>> # Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=4000)
+>>> gt_states = collect(SingleRhythmModel(mp, cont_sigma=1 / np.sqrt(mp.sr)), n_samp=4000)
 >>> meas = np.real(gt_states) + 10 * np.random.randn(len(gt_states))
 >>> mp_init = MatsudaParams(A=0.99, freq=12, sr=1000)
 >>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=0.8, psi=np.zeros(1), r_s=5, lambda_=0)
->>> kf = fit_kf_parameters(meas, kf, tol=1e-6)
+>>> kf = fit_kf_parameters(meas, kf, tol=1e-3)
 >>> assert abs(kf.mp.freq - 10) < 1, f"freq={kf.mp.freq}"
 
 Fit params pink noise
@@ -273,17 +273,6 @@ def nll_opt_wrapper(x, meas, sr, psi, lambda_):
 def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
     denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
     return s**2 / np.abs(denom) ** 2
-
-
-def theor_psd_mk_mar(f: float, s: float, mp: MatsudaParams) -> float:
-    """Theoretical PSD for Matsuda-Komaki multivariate AR process"""
-    phi = 2 * np.pi * mp.freq / mp.sr
-    psi = 2 * np.pi * f / mp.sr
-    A = mp.A
-
-    denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
-    num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
-    return s**2 * num / denom
 
 
 PsdFunc = Callable[[float], float]

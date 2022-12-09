@@ -16,7 +16,7 @@ from kalman_experiments.models import MatsudaParams, gen_ar_noise_coefficients
     "A, q_s, r_s, alpha, order, sim_func, bound",
     [
         (0.99999, 0.001, 0.2, 0, 1, SSPE.gen_sine_w_white, 1.8),
-        (0.99999, 0.001, 0.2, 1.5, 30, SSPE.gen_sine_w_pink, 2.1),
+        (0.99999, 0.001, 0.2, 1.5, 30, SSPE.gen_sine_w_pink, 3),
         (0.99999, 0.001, 0.2, 0, 1, SSPE.gen_sine_w_pink, 10),
         (0.9995, 0.18, 0.14, 1.5, 30, SSPE.gen_filt_pink_noise_w_added_pink_noise, 60),
         (0.99, 3.16, 1, 0, 1, SSPE.gen_state_space_model_white, 45),

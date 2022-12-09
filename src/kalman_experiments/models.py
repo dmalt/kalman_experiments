@@ -32,13 +32,40 @@ class MatsudaParams:
 @dataclass
 class SingleRhythmModel:
     mp: MatsudaParams
-    sigma: float
+    cont_sigma: float
     x: complex = 0
 
     def step(self) -> complex:
         """Update model state and generate measurement"""
-        self.x = self.mp.Phi * self.x + complex_randn() * self.sigma
+        sigma_discrete = self.cont_sigma * np.sqrt(self.mp.sr)
+        self.x = self.mp.Phi * self.x + complex_randn() * sigma_discrete
         return self.x
+
+    def psd_onesided(self, f: float) -> float:
+        """
+        Theoretical PSD for Matsuda-Komaki multivariate AR process
+
+        Notes
+        -----
+        Implementation follows eq. (6.38) from [1] for the first state component, i.e.
+        it effectively computes p_{11} from (6.38) for the single-rhythm MK model
+
+        N.B.: eq. (6.38) is for two-sided spectrum. To match the default of scipy.signal.welch,
+        we return onesided spectrum, which is double the original
+
+        References
+        ----------
+        .. [1] Kitagawa, Genshiro. 2010. Introduction to Time Series Modeling.
+        0 ed. Chapman and Hall/CRC. https://doi.org/10.1201/9781584889229.
+
+        """
+        phi = 2 * np.pi * self.mp.freq / self.mp.sr
+        psi = 2 * np.pi * f / self.mp.sr
+        A = self.mp.A
+
+        denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
+        num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
+        return self.cont_sigma**2 * num / denom * 2
 
 
 def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec1D:

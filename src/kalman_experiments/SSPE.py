@@ -120,7 +120,7 @@ def gen_state_space_model_white(duration_sec: float, Fs: float) -> SimulationRes
     NOISE_SIGMA_GT = 1
 
     mp = MatsudaParams(A=0.99, freq=6, sr=Fs)
-    oscillation_model = SingleRhythmModel(mp, sigma=SIGNAL_SIGMA_GT)
+    oscillation_model = SingleRhythmModel(mp, cont_sigma=SIGNAL_SIGMA_GT)
     gt_states = collect(oscillation_model, int(duration_sec * Fs))
 
     noise = NOISE_SIGMA_GT * np.random.randn(int(duration_sec * Fs))
@@ -136,7 +136,7 @@ def gen_state_space_model_pink(duration_sec: float, Fs: float) -> SimulationResu
     NOISE_AR_ORDER = 1000
 
     mp = MatsudaParams(A=0.99, freq=6, sr=Fs)
-    oscillation_model = SingleRhythmModel(mp, sigma=SIGNAL_SIGMA_GT)
+    oscillation_model = SingleRhythmModel(mp, cont_sigma=SIGNAL_SIGMA_GT)
     gt_states = collect(oscillation_model, int(duration_sec * Fs))
 
     x0 = np.random.rand(NOISE_AR_ORDER)
