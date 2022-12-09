@@ -15,8 +15,6 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import welch
-
 from kalman_experiments import SSPE
 from kalman_experiments.model_selection import (
     estimate_sigmas,
@@ -25,6 +23,7 @@ from kalman_experiments.model_selection import (
     theor_psd_mk_mar,
 )
 from kalman_experiments.models import MatsudaParams, gen_ar_noise_coefficients
+from scipy.signal import welch
 
 
 def to_db(arr):
@@ -35,7 +34,8 @@ def to_db(arr):
 SRATE = 1000
 DURATION_SEC = 1000
 DURATION_SAMP = int(DURATION_SEC * SRATE)
-sim_res = SSPE.gen_sine_w_pink(DURATION_SEC, SRATE)
+# sim_res = SSPE.gen_sine_w_pink(DURATION_SEC, SRATE)
+sim_res = SSPE.gen_filt_pink_noise_w_added_pink_noise(DURATION_SEC, SRATE)
 
 ff, psd = welch(sim_res.data, fs=SRATE, nperseg=2000)
 
