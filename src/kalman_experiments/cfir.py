@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass
 
 import numpy as np
-import scipy.signal as sg
+import scipy.signal as sg  # type: ignore
 
 from .numpy_types import Vec1D
 

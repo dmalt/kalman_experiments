@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
-from mne.io.brainvision.brainvision import read_raw_brainvision
+from mne.io.brainvision.brainvision import read_raw_brainvision  # type: ignore
 
 from kalman_experiments.numpy_types import Timeseries, Vec1D
 

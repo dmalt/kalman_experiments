@@ -48,7 +48,7 @@ Fit params pink noise
 from typing import Callable, Collection, NamedTuple, Sequence
 
 import numpy as np
-from scipy.optimize import nnls
+from scipy.optimize import nnls  # type: ignore
 from tqdm import trange
 
 from kalman_experiments.kalman.core import SimpleKF

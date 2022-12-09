@@ -26,7 +26,7 @@ from typing import NamedTuple
 
 import numpy as np
 import numpy.typing as npt
-from scipy.signal import filtfilt, firwin, hilbert
+from scipy.signal import filtfilt, firwin, hilbert  # type: ignore
 
 from .models import ArNoiseModel, MatsudaParams, SingleRhythmModel, collect
 
