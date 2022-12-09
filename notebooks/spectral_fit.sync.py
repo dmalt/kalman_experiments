@@ -15,15 +15,11 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
-from kalman_experiments import SSPE
-from kalman_experiments.model_selection import (
-    estimate_sigmas,
-    get_psd_val_from_est,
-    theor_psd_ar,
-    theor_psd_mk_mar,
-)
-from kalman_experiments.models import MatsudaParams, gen_ar_noise_coefficients
 from scipy.signal import welch
+
+from kalman_experiments import SSPE
+from kalman_experiments.model_selection import estimate_sigmas, get_psd_val_from_est, theor_psd_ar
+from kalman_experiments.models import MatsudaParams, SingleRhythmModel, gen_ar_noise_coefficients
 
 
 def to_db(arr):
@@ -43,7 +39,7 @@ mp = MatsudaParams(A=0.999999, freq=6, sr=SRATE)
 # mp = MatsudaParams(A=1, freq=6, sr=SRATE)
 
 est_psd_func = partial(get_psd_val_from_est, freqs=ff, psd=psd)
-mar_psd_func = partial(theor_psd_mk_mar, s=1, mp=mp)
+mar_psd_func = SingleRhythmModel(mp, cont_sigma=1).psd_onesided
 a_pink = gen_ar_noise_coefficients(order=30, alpha=1.5)
 a_white = gen_ar_noise_coefficients(order=1, alpha=0)
 ar_noise_psd_func_pink = partial(theor_psd_ar, s=1, ar_coef=a_pink, sr=SRATE)

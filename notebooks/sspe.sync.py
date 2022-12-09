@@ -9,15 +9,14 @@ from scipy.stats import circstd  # type: ignore
 from tqdm import trange
 
 from kalman_experiments import SSPE
-from kalman_experiments.kalman import PerturbedP1DMatsudaKF, apply_kf
+from kalman_experiments.kalman.wrappers import PerturbedP1DMatsudaKF, apply_kf
 from kalman_experiments.model_selection import (
     estimate_sigmas,
     fit_kf_parameters,
     get_psd_val_from_est,
     theor_psd_ar,
-    theor_psd_mk_mar,
 )
-from kalman_experiments.models import MatsudaParams, gen_ar_noise_coefficients
+from kalman_experiments.models import MatsudaParams, SingleRhythmModel, gen_ar_noise_coefficients
 
 # %%
 # Generate data
@@ -68,7 +67,7 @@ def fit_parameters(
     est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd / 2)
     psi = gen_ar_noise_coefficients(noise_alpha, noise_order)
     ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
-    mar_psd_func = partial(theor_psd_mk_mar, s=1, mp=mp_init)
+    mar_psd_func = SingleRhythmModel(mp_init, cont_sigma=1).psd_onesided
 
     q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
     q_s_est, r_s_est = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
@@ -106,12 +105,12 @@ for k, s in sim.items():
     mp_init = MatsudaParams(A_fit, freq=FREQ_GT, sr=SRATE)
 
     kf_pink_fit = fit_parameters(train_data, mp_init, alpha, order, nperseg=NPERSEG)
-    params_pink[k] = (kf_pink_fit.M.A, kf_pink_fit.M.freq, kf_pink_fit.q_s, kf_pink_fit.r_s)
+    params_pink[k] = (kf_pink_fit.mp.A, kf_pink_fit.mp.freq, kf_pink_fit.q_s, kf_pink_fit.r_s)
 
     kf_white_fit = fit_parameters(
         train_data, mp_init, noise_alpha=0, noise_order=1, nperseg=NPERSEG
     )
-    params_white[k] = (kf_white_fit.M.A, kf_white_fit.M.freq, kf_white_fit.q_s, kf_white_fit.r_s)
+    params_white[k] = (kf_white_fit.mp.A, kf_white_fit.mp.freq, kf_white_fit.q_s, kf_white_fit.r_s)
 
     cstd_pink[k] = []
     cstd_white[k] = []
@@ -176,22 +175,11 @@ df_white = df_white.rename(
 
 df = pd.concat([df_pink, df_white])
 
-# means = df.groupby("algorithm").mean()
-# errors = df.groupby("algorithm").std()
-
 fig = plt.figure(figsize=(15, 10))
 sns.boxplot(df, hue="algorithm", x="simulation", y="circular std")
 plt.ylim([0, 100])
 plt.grid()
 plt.show()
-# grouped_barplot(df, cat, subcat, val, err)
-# df.unstack()
-
 
 # %%
-df
-
-# %%
-df.to_csv("metrics.csv", index=False)
-# %%
-df.groupby(("simulation", "algoritm")).mean()
+# df.to_csv("metrics.csv", index=False)
