@@ -286,7 +286,7 @@ def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> float:
     `return_onesided=True` (default)
     """
     ind = np.argmin((freqs - f) ** 2)
-    return psd[ind] / 2
+    return psd[ind]
 
 
 def estimate_sigmas(
