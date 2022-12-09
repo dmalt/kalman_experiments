@@ -20,3 +20,4 @@ scripts:
 	python ./notebooks/sspe.sync.py
 	python ./notebooks/spectral_fit.sync.py
 	python ./notebooks/roc_bci.sync.py
+	python ./notebooks/single_channel_kalman.sync.py
