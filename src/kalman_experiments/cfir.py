@@ -66,5 +66,5 @@ class CFIRParams:
 
 def apply_cfir(cfir_params: CFIRParams, signal: Vec1D, delay: int) -> Vec1D:
     cfir_params_dict = asdict(cfir_params) | {"delay": delay}
-    cfir = CFIRBandDetector(**cfir_params_dict)
+    cfir = CFIRBandDetector(**cfir_params_dict)  # type: ignore
     return cfir.apply(signal)

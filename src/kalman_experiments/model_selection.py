@@ -126,8 +126,8 @@ def normalize_measurement_dimensions(meas: Vec1D) -> list[Vec]:
 
 def apply_kf(KF: SimpleKF, y: list[Vec]) -> tuple[list[Vec], list[Cov]]:
     n = len(y) - 1
-    x: list[Vec] = [None] * (n + 1)  # pyright: ignore  # x^t_t
-    P: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^t_t
+    x: list[Vec] = [None] * (n + 1)  # type: ignore  # x^t_t
+    P: list[Cov] = [None] * (n + 1)  # type: ignore  # P^t_t
     x[0], P[0] = KF.x, KF.P
     for t in range(1, n + 1):
         x[t], P[t] = KF.step(y[t])
@@ -138,10 +138,10 @@ def apply_kalman_interval_smoother(
     KF: SimpleKF, x: list[Vec], P: list[Cov]
 ) -> tuple[list[Vec], list[Cov], list[Mat]]:
     n = len(x) - 1
-    x_n: list[Vec] = [None] * (n + 1)  # pyright: ignore  # x^n_t
-    P_n: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^n_t
+    x_n: list[Vec] = [None] * (n + 1)  # type: ignore  # x^n_t
+    P_n: list[Cov] = [None] * (n + 1)  # type: ignore  # P^n_t
     x_n[n], P_n[n] = x[n], P[n]
-    J: list[Mat] = [None] * (n + 1)  # pyright: ignore
+    J: list[Mat] = [None] * (n + 1)  # type: ignore
     for t in range(n, 0, -1):
         x_n[t - 1], P_n[t - 1], J[t - 1] = smoother_step(KF, x[t - 1], P[t - 1], x_n[t], P_n[t])
 
@@ -207,7 +207,7 @@ def estimate_adjacent_states_covariances(
     n = len(P) - 1
     P_ = Phi @ P[n - 1] @ Phi.T + Q  # P^{n-1}_n
     K = np.linalg.solve(A @ P_ @ A.T + R, A @ P[n]).T  # K_n, eq. (6.23) in [1]
-    P_nt: list[Cov] = [None] * (n + 1)  # pyright: ignore  # P^n_{t-1, t-2}
+    P_nt: list[Cov] = [None] * (n + 1)  # type: ignore  # P^n_{t-1, t-2}
     P_nt[n - 1] = (np.eye(K.shape[0]) - K @ A) @ Phi @ P[n - 1]  # P^n_{n, n-1}, eq.(6.55) in [1]
 
     for t in range(n, 1, -1):
@@ -301,17 +301,15 @@ def get_psd_val_from_est(f, freqs: np.ndarray, psd: np.ndarray) -> float:
 
 
 def estimate_sigmas(
-    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float], eps=1e-6
+    basis_psd_funcs: list[PsdFunc], data_psd_func: PsdFunc, freqs: Sequence[float]
 ) -> np.ndarray:
-    A = []
+    A: list[list[float]] = []
     b = [1] * len(freqs)
     for row, f in enumerate(freqs):
         b_ = data_psd_func(f)
         A.append([])
         for func in basis_psd_funcs:
             A[row].append(func(f) / b_)
-    # print(np.linalg.cond(np.matrix(A)))
-    # b = np.array(b) - np.array(A) @ np.ones_like(b) * eps
     return nnls(np.array(A), np.array(b))[0]
 
 
