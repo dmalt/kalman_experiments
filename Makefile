@@ -13,3 +13,5 @@ doctests_coverage:
 	coverage report
 pytest_fast:
 	pytest -m "not slow"
+doctest:
+	python src/kalman_experiments/model_selection.py
