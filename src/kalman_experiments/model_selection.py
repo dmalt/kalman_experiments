@@ -2,11 +2,13 @@
 Examples
 --------
 Get smoothed data
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
->>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
->>> import matplotlib.pyplot as plt
 >>> import numpy as np
->>> # Setup oscillatioins model and generate oscillatory signal
+>>> import matplotlib.pyplot as plt
+>>> from kalman_experiments.kalman.wrappers import PerturbedP1DMatsudaKF
+>>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
+>>> from kalman_experiments.model_selection import fit_kf_parameters
+
+Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
 >>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
 >>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
@@ -16,35 +18,31 @@ Get smoothed data
 >>> x_n, P_n, J = apply_kalman_interval_smoother(kf, x, P)
 >>> res = plt.plot([xx[0] for xx in x], label="fp", linewidth=4)
 >>> res = plt.plot([xxn[0] for xxn in x_n], label="smooth", linewidth=4)
->>> res = plt.plot(np.real(gt_states), label="gt", linewidth=4)
+>>> res = plt.plot(np.real(gt_states), label="gt", linewidth=2)
 >>> l = plt.legend()
 >>> plt.show()
 
 Fit params white noise
->>> from kalman_experiments.model_selection import fit_kf_parameters
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
->>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
->>> import matplotlib.pyplot as plt
->>> import numpy as np
 >>> # Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
->>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
->>> kf = PerturbedP1DMatsudaKF(MatsudaParams(A=0.999, freq=1, sr=1000), q_s=2, psi=np.zeros(0), r_s=5, lambda_=0)
->>> kf = fit_kf_parameters(meas, kf)
->>> print(kf.mp)
+>>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=4000)
+>>> meas = np.real(gt_states) + 10 * np.random.randn(len(gt_states))
+>>> mp_init = MatsudaParams(A=0.99, freq=12, sr=1000)
+>>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=0.8, psi=np.zeros(1), r_s=5, lambda_=0)
+>>> kf = fit_kf_parameters(meas, kf, tol=1e-6)
+>>> assert abs(kf.mp.freq - 10) < 1, f"freq={kf.mp.freq}"
 
 Fit params pink noise
->>> from kalman_experiments.model_selection import fit_kf_parameters
 >>> from kalman_experiments import SSPE
->>> from kalman_experiments.kalman import PerturbedP1DMatsudaKF
->>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect, gen_ar_noise_coefficients
+>>> from kalman_experiments.models import gen_ar_noise_coefficients
 >>> import numpy as np
 >>> # Setup oscillatioins model and generate oscillatory signal
 >>> sim = SSPE.gen_sine_w_pink(1, 1000)
 >>> a = gen_ar_noise_coefficients(alpha=1, order=20)
->>> kf = PerturbedP1DMatsudaKF(MatsudaParams(A=0.8, freq=1, sr=1000), q_s=2, psi=a, r_s=1, lambda_=1e-3)
+>>> mp_init = MatsudaParams(A=0.8, freq=1, sr=1000)
+>>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=1, psi=a, r_s=1, lambda_=1e-3)
 >>> kf = fit_kf_parameters(sim.data, kf)
+>>> assert abs(kf.mp.freq - 6) < 1
 
 """
 from typing import Callable, Collection, NamedTuple, Sequence
