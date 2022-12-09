@@ -7,7 +7,7 @@ from typing import Protocol
 import numpy as np
 from mne.io.brainvision.brainvision import read_raw_brainvision
 
-from kalman_experiments.numpy_types import Timeseries, Vec, Vec1D
+from kalman_experiments.numpy_types import Timeseries, Vec1D
 
 from .complex import complex_randn
 
@@ -63,7 +63,7 @@ def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec1D:
     return -np.array(a[1:])
 
 
-class ArNoise:
+class ArNoiseModel:
     """
     Generate 1/f^alpha noise with truncated autoregressive process, as described in [1]
 

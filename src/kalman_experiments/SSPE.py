@@ -28,7 +28,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import filtfilt, firwin, hilbert
 
-from .models import ArNoise, MatsudaParams, SingleRhythmModel, collect
+from .models import ArNoiseModel, MatsudaParams, SingleRhythmModel, collect
 
 
 def make_pink_noise(alpha: float, n_samp: int, dt: float) -> npt.NDArray[np.floating]:
@@ -140,7 +140,7 @@ def gen_state_space_model_pink(duration_sec: float, Fs: float) -> SimulationResu
     gt_states = collect(oscillation_model, int(duration_sec * Fs))
 
     x0 = np.random.rand(NOISE_AR_ORDER)
-    noise_model = ArNoise(x0=x0, alpha=ALPHA, order=NOISE_AR_ORDER, s=NOISE_SIGMA_GT)
+    noise_model = ArNoiseModel(x0=x0, alpha=ALPHA, order=NOISE_AR_ORDER, s=NOISE_SIGMA_GT)
     noise = collect(noise_model, int(duration_sec * Fs))
 
     data: npt.NDArray[np.floating] = np.real(gt_states) + noise  # type: ignore
