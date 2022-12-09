@@ -5,3 +5,4 @@ __pycache__
 *.npz
 .mypy_cache
 metrics.csv
+.coverage
