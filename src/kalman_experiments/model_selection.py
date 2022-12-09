@@ -80,7 +80,6 @@ def fit_kf_parameters(
         freq *= sr / (2 * np.pi)
 
         mp = MatsudaParams(amp, freq, sr)
-        # KF = PerturbedP1DMatsudaKF(KF.mp, q_s, KF.psi, r_s, KF.lambda_)
         KF = PerturbedP1DMatsudaKF(mp, q_s, KF.psi, r_s, KF.lambda_)
         KF.KF.x = x_0
         KF.KF.P = P_0
@@ -108,7 +107,7 @@ def em_step(meas: Vec | Vec1D, KF: SimpleKF, pb) -> KFParams:
     freq, Amp, q_s, r_s = params_update(S, Phi, n)
     pb.set_description(
         f"Fitting KF parameters: nll={nll:.2f},"
-        f"f={freq*1000/2/np.pi:.2f}, A={Amp:.4f}, {q_s:.2f}, {r_s:.2f}"
+        f"f={freq*1000/2/np.pi:.2f}, A={Amp:.4f}, {q_s:.4f}, {r_s:.2f}"
     )
     x_0_new = x_n[0]
     P_0_new = P_n[0]
@@ -249,11 +248,9 @@ def params_update(S: dict[str, Mat], Phi: Mat, n: int) -> tuple[float, float, fl
 def compute_kf_nll(y: list[Vec], x: list[Vec], P: list[Cov], KF: SimpleKF) -> float:
     n = len(y) - 1
     negloglikelihood = 0
-    r_2: float = 0
     for t in range(1, n + 1):
         x_, P_ = KF.predict(x[t], P[t])
         eps = y[t] - KF.H @ x_
-        r_2 += float(eps @ eps.T)
         Sigma = KF.H @ P_ @ KF.H.T + KF.R
         tmp = np.linalg.solve(Sigma, eps)  # Sigma inversion
         negloglikelihood += 0.5 * (np.log(np.linalg.det(Sigma)) + eps.T @ tmp)
