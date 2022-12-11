@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from cmath import exp
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Collection, Protocol
 
 import numpy as np
 from mne.io.brainvision.brainvision import read_raw_brainvision  # type: ignore
@@ -21,6 +21,7 @@ class SignalGenerator(Protocol):
 @dataclass
 class MatsudaParams:
     """Single oscillation Matsuda-Komaki model parameters"""
+
     A: float
     freq: float
     sr: float
@@ -32,13 +33,12 @@ class MatsudaParams:
 @dataclass
 class SingleRhythmModel:
     mp: MatsudaParams
-    cont_sigma: float
+    sigma: float
     x: complex = 0
 
     def step(self) -> complex:
         """Update model state and generate measurement"""
-        sigma_discrete = self.cont_sigma * np.sqrt(self.mp.sr)
-        self.x = self.mp.Phi * self.x + complex_randn() * sigma_discrete
+        self.x = self.mp.Phi * self.x + complex_randn() * self.sigma
         return self.x
 
     def psd_onesided(self, f: float) -> float:
@@ -63,9 +63,11 @@ class SingleRhythmModel:
         psi = 2 * np.pi * f / self.mp.sr
         A = self.mp.A
 
-        denom = np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
+        denom = (
+            np.abs(1 - 2 * A * np.cos(phi) * np.exp(-1j * psi) + A**2 * np.exp(-2j * psi)) ** 2
+        )
         num = 1 + A**2 - 2 * A * np.cos(phi) * np.cos(psi)
-        return self.cont_sigma**2 * num / denom * 2
+        return self.sigma**2 / self.mp.sr * num / denom * 2
 
 
 def gen_ar_noise_coefficients(alpha: float, order: int) -> Vec1D:
@@ -102,7 +104,7 @@ class ArNoiseModel:
         Order of the AR model
     alpha : float in range [-2, 2]
         Alpha as in '1/f^alpha'
-    s : float, >= 0
+    sigma : float, >= 0
         White noise standard deviation (see [1])
 
     References
@@ -113,17 +115,28 @@ class ArNoiseModel:
 
     """
 
-    def __init__(self, x0: np.ndarray, order: int = 1, alpha: float = 1, s: float = 1):
-        assert (len(x0) == order), f"x0 length must match AR order; got {len(x0)=}, {order=}"
+    def __init__(
+        self, x0: np.ndarray, sr: float, order: int = 1, alpha: float = 1, sigma: float = 1
+    ):
+        assert len(x0) == order, f"x0 length must match AR order; got {len(x0)=}, {order=}"
         self.a = gen_ar_noise_coefficients(alpha, order)
         self.x = x0
-        self.s = s
+        self.sigma = sigma
+        self.sr = sr
 
     def step(self) -> float:
         """Make one step of the AR process"""
-        y_next = self.a @ self.x + np.random.randn() * self.s
+        y_next = self.a @ self.x + np.random.randn() * self.sigma
         self.x = np.concatenate([[y_next], self.x[:-1]])  # type: ignore
         return float(y_next)
+
+    def psd_onesided(self, f: float) -> float:
+        return theor_psd_ar(f, self.sigma, ar_coef=self.a, sr=self.sr) * 2 / self.sr
+
+
+def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
+    denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
+    return s**2 / np.abs(denom) ** 2
 
 
 class RealNoise:

@@ -10,8 +10,8 @@ Get smoothed data
 
 Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, cont_sigma=1), n_samp=1000)
->>> meas = np.real(gt_states) + 10*np.random.randn(len(gt_states))
+>>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
+>>> meas = np.real(gt_states) + np.random.randn(len(gt_states))
 >>> kf = PerturbedP1DMatsudaKF(mp, q_s=1, psi=np.zeros(0), r_s=10, lambda_=0).KF
 >>> y = normalize_measurement_dimensions(meas)
 >>> x, P = apply_kf(kf, y)
@@ -25,7 +25,7 @@ Setup oscillatioins model and generate oscillatory signal
 Fit params white noise
 >>> # Setup oscillatioins model and generate oscillatory signal
 >>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, cont_sigma=1 / np.sqrt(mp.sr)), n_samp=4000)
+>>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=4000)
 >>> meas = np.real(gt_states) + 10 * np.random.randn(len(gt_states))
 >>> mp_init = MatsudaParams(A=0.99, freq=12, sr=1000)
 >>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=0.8, psi=np.zeros(1), r_s=5, lambda_=0)
@@ -45,7 +45,7 @@ Fit params pink noise
 >>> assert abs(kf.mp.freq - 6) < 1
 
 """
-from typing import Callable, Collection, NamedTuple, Sequence
+from typing import Callable, NamedTuple, Sequence
 
 import numpy as np
 from scipy.optimize import nnls  # type: ignore
@@ -268,11 +268,6 @@ def nll_opt_wrapper(x, meas, sr, psi, lambda_):
     KF = PerturbedP1DMatsudaKF(mp, q_s, psi, r_s, lambda_)
     x, P = apply_kf(KF.KF, y)
     return compute_kf_nll(y, x, P, KF.KF)
-
-
-def theor_psd_ar(f: float, s: float, ar_coef: Collection[float], sr: float) -> float:
-    denom = 1 - sum(a * np.exp(-2j * np.pi * f / sr * m) for m, a in enumerate(ar_coef, 1))
-    return s**2 / np.abs(denom) ** 2
 
 
 PsdFunc = Callable[[float], float]

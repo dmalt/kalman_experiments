@@ -14,9 +14,13 @@ from kalman_experiments.model_selection import (
     estimate_sigmas,
     fit_kf_parameters,
     get_psd_val_from_est,
-    theor_psd_ar,
 )
-from kalman_experiments.models import MatsudaParams, SingleRhythmModel, gen_ar_noise_coefficients
+from kalman_experiments.models import (
+    ArNoiseModel,
+    MatsudaParams,
+    SingleRhythmModel,
+    gen_ar_noise_coefficients,
+)
 
 # %%
 # Generate data
@@ -64,15 +68,23 @@ def fit_parameters(
     nperseg: int,
 ) -> PerturbedP1DMatsudaKF:
     freqs, psd = welch(train_data, fs=mp_init.sr, nperseg=nperseg)
-    est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd / 2)
+    est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd)
     psi = gen_ar_noise_coefficients(noise_alpha, noise_order)
-    ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
-    mar_psd_func = SingleRhythmModel(mp_init, cont_sigma=1).psd_onesided
+
+    # ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
+    ar_psd_func = ArNoiseModel(
+        np.random.randn(noise_order),
+        sr=mp_init.sr,
+        order=noise_order,
+        alpha=noise_alpha,
+        sigma=1,
+    ).psd_onesided
+    mar_psd_func = SingleRhythmModel(mp_init, sigma=1).psd_onesided
 
     q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
-    q_s_est, r_s_est = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
+    q_s_est, r_s_est = np.sqrt(q_s_2), np.sqrt(r_s_2)
     r_s_est, q_s_est = max(r_s_est, 0.0001), max(q_s_est, 0.0001)
-    print(f"{q_s_est=:.2f}, {r_s_est=:.2f}")
+    print(f"{q_s_est=:.4f}, {r_s_est=:.4f}")
 
     psi = gen_ar_noise_coefficients(alpha=noise_alpha, order=noise_order)
     kf = PerturbedP1DMatsudaKF(mp_init, q_s=q_s_est, psi=psi, r_s=r_s_est)
@@ -86,11 +98,11 @@ params_pink = {}
 params_white = {}
 
 for k, s in sim.items():
-    # if k != "sines_in_pink":
-    #     continue
-
-    if k != "filtered_pink":
+    if k != "sines_in_pink":
         continue
+
+    # if k != "filtered_pink":
+    #     continue
     print(f"{k:-^80}")
     train_data = s.data[:TRAIN_LIMIT_SAMP]
 
@@ -99,7 +111,7 @@ for k, s in sim.items():
     if k.startswith("sines"):
         A_fit = 0.99999
     elif k.startswith("filtered"):
-        A_fit = 0.999
+        A_fit = 0.9995
     alpha, order = (ALPHA, KF_NOISE_ORDER) if k.endswith("pink") else (0, 1)
 
     mp_init = MatsudaParams(A_fit, freq=FREQ_GT, sr=SRATE)

@@ -6,7 +6,7 @@ from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
 
 def test_theoretical_psd_for_single_rhythm_model_matches_estimated():
     mp = MatsudaParams(A=0.99, freq=10, sr=1000)
-    srm = SingleRhythmModel(mp, cont_sigma=1)
+    srm = SingleRhythmModel(mp, sigma=1)
 
     sim_data = collect(srm, n_samp=100_000)
     ff, psd_est = welch(np.real(sim_data), fs=mp.sr, nperseg=3500)

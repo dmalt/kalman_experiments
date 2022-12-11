@@ -38,7 +38,7 @@ A_GT = 0.99  # as in x_next = A*exp(2*pi*OSCILLATION_FREQ / sr)
 SIGNAL_SIGMA_GT = 1  # std of the model-driving white noise in the Matsuda model
 
 mp = MatsudaParams(A_GT, FREQ_GT, SRATE)
-oscillation_model = SingleRhythmModel(mp, cont_sigma=SIGNAL_SIGMA_GT)
+oscillation_model = SingleRhythmModel(mp, sigma=SIGNAL_SIGMA_GT)
 gt_states = collect(oscillation_model, N_SAMP)
 
 
@@ -85,9 +85,17 @@ NOISE_SIGMA_KF = SIM_NOISE_SIGMA_GT
 DELAY = -10
 DELAY_CFIR = DELAY
 
-# kf = Difference1DMatsudaKF(A=A_KF, f=FREQ_KF, sr=SRATE, q_s=SIGNAL_SIGMA_KF, psi=PSI, r_s=NOISE_SIGMA_KF)
+# kf = Difference1DMatsudaKF(
+#     A=A_KF, f=FREQ_KF, sr=SRATE, q_s=SIGNAL_SIGMA_KF, psi=PSI, r_s=NOISE_SIGMA_KF
+# )
 # kf = PerturbedP1DMatsudaKF(
-#     A=A_KF, f=FREQ_KF, sr=SRATE, q_s=SIGNAL_SIGMA_KF, psi=noise_model.a, r_s=NOISE_SIGMA_KF, lambda_=0
+#     A=A_KF,
+#     f=FREQ_KF,
+#     sr=SRATE,
+#     q_s=SIGNAL_SIGMA_KF,
+#     psi=noise_model.a,
+#     r_s=NOISE_SIGMA_KF,
+#     lambda_=0,
 # )
 mp = MatsudaParams(A_KF, FREQ_KF, SRATE)
 kf = PerturbedP1DMatsudaSmoother(
@@ -154,7 +162,7 @@ real_noise_model, srate = prepare_real_noise(raw_path=raw_path, s=REAL_NOISE_SIG
 noise_real = collect(real_noise_model, N_SAMP)
 meas = np.real(gt_states) + noise_real
 
-legend = ["Generated signal", f"1/f", "Real noise"]
+legend = ["Generated signal", "1/f", "Real noise"]
 plot_generated_signal(noise_real, meas, sr=int(srate), alpha=ALPHA, tmin=0, tmax=2, legend=legend)
 plt.show()
 
@@ -204,4 +212,16 @@ plt.show()
 # In[12]:
 
 
-# np.savez(f"simulated_data_ar_{NOISE_AR_ORDER}.npz", gt_states=gt_states, noise_sim=noise_sim, noise_real=noise_real, sim_noise_sigma=SIM_NOISE_SIGMA_GT, real_noise_sigma=REAL_NOISE_SIGMA_GT, sr=SRATE, noise_ar_order=NOISE_AR_ORDER, freq=FREQ_GT, A=A_GT, alpha=ALPHA)
+# np.savez(
+#     f"simulated_data_ar_{NOISE_AR_ORDER}.npz",
+#     gt_states=gt_states,
+#     noise_sim=noise_sim,
+#     noise_real=noise_real,
+#     sim_noise_sigma=SIM_NOISE_SIGMA_GT,
+#     real_noise_sigma=REAL_NOISE_SIGMA_GT,
+#     sr=SRATE,
+#     noise_ar_order=NOISE_AR_ORDER,
+#     freq=FREQ_GT,
+#     A=A_GT,
+#     alpha=ALPHA,
+# )

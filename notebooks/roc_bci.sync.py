@@ -73,7 +73,7 @@ def fit_parameters(
     psi = gen_ar_noise_coefficients(noise_alpha, noise_order)
     ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
 
-    mar_psd_func = SingleRhythmModel(mp_init, cont_sigma=1).psd_onesided
+    mar_psd_func = SingleRhythmModel(mp_init, sigma=1).psd_onesided
 
     q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
     q_s_est, r_s_est = np.sqrt(q_s_2 * SRATE), np.sqrt(r_s_2 * SRATE)
