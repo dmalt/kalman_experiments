@@ -22,28 +22,6 @@ Setup oscillatioins model and generate oscillatory signal
 >>> l = plt.legend()
 >>> plt.show()
 
-Fit params white noise
->>> # Setup oscillatioins model and generate oscillatory signal
->>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
->>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=4000)
->>> meas = np.real(gt_states) + 10 * np.random.randn(len(gt_states))
->>> mp_init = MatsudaParams(A=0.99, freq=12, sr=1000)
->>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=0.8, psi=np.zeros(1), r_s=5, lambda_=0)
->>> kf = fit_kf_parameters(meas, kf, tol=1e-3)
->>> assert abs(kf.mp.freq - 10) < 1, f"freq={kf.mp.freq}"
-
-Fit params pink noise
->>> from kalman_experiments import SSPE
->>> from kalman_experiments.models import gen_ar_noise_coefficients
->>> import numpy as np
->>> # Setup oscillatioins model and generate oscillatory signal
->>> sim = SSPE.gen_sine_w_pink(1, 1000)
->>> a = gen_ar_noise_coefficients(alpha=1, order=20)
->>> mp_init = MatsudaParams(A=0.8, freq=1, sr=1000)
->>> kf = PerturbedP1DMatsudaKF(mp_init, q_s=1, psi=a, r_s=1, lambda_=1e-3)
->>> kf = fit_kf_parameters(sim.data, kf)
->>> assert abs(kf.mp.freq - 6) < 1
-
 """
 from typing import Callable, NamedTuple, Sequence
 
