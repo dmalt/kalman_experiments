@@ -91,3 +91,7 @@ def plot_crosscorrelations(t_ms, corrs_cfir, corrs_kf):
 
     # plt.subplots_adjust(wspace=0.5, hspace=0.5)
     return fig, ax
+
+
+def to_db(arr):
+    return 10 * np.log10(arr)

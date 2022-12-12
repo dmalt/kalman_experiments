@@ -60,7 +60,7 @@ def em_step(meas: Vec | Vec1D, KF: SimpleKF, pb) -> KFParams:
     freq, Amp, q_s, r_s = params_update(S, Phi, n)
     pb.set_description(
         f"Fitting KF parameters: nll={nll:.2f},"
-        f"f={freq*1000/2/np.pi:.2f}, A={Amp:.4f}, {q_s:.4f}, {r_s:.2f}"
+        f"f={freq*500/2/np.pi:.2f}, A={Amp:.4f}, {q_s:.4f}, {r_s:.2f}"
     )
     x_0_new = x_n[0]
     P_0_new = P_n[0]
