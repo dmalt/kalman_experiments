@@ -1,4 +1,31 @@
-"""Vector general-case kalman filter implementations"""
+"""
+Vector general-case kalman filter implementations
+
+
+Examples
+--------
+Get smoothed data
+>>> import numpy as np
+>>> import matplotlib.pyplot as plt
+>>> from kalman_experiments.kalman.wrappers import PerturbedP1DMatsudaKF
+>>> from kalman_experiments.models import MatsudaParams, SingleRhythmModel, collect
+>>> from kalman_experiments.model_selection import fit_kf_parameters
+
+Setup oscillatioins model and generate oscillatory signal
+>>> mp = MatsudaParams(A=0.99, freq=10, sr=1000)
+>>> gt_states = collect(SingleRhythmModel(mp, sigma=1), n_samp=1000)
+>>> meas = np.real(gt_states) + np.random.randn(len(gt_states))
+>>> kf = PerturbedP1DMatsudaKF(mp, q_s=1, psi=np.zeros(0), r_s=10, lambda_=0).KF
+>>> y = normalize_measurement_dimensions(meas)
+>>> x, P = apply_kf(kf, y)
+>>> x_n, P_n, J = apply_kalman_interval_smoother(kf, x, P)
+>>> res = plt.plot([xx[0] for xx in x], label="fp", linewidth=4)
+>>> res = plt.plot([xxn[0] for xxn in x_n], label="smooth", linewidth=4)
+>>> res = plt.plot(np.real(gt_states), label="gt", linewidth=2)
+>>> l = plt.legend()
+>>> plt.show()
+
+"""
 import numpy as np
 
 from ..numpy_types import Cov, Mat, Vec
@@ -41,7 +68,6 @@ class DifferenceKF:
         self.R = R
 
         self.x = np.zeros((n_states, 1))  # posterior state (after update)
-        # self.P = np.zeros((n_states, n_states))  # posterior state covariance (after update)
         self.P = np.eye(n_states)  # posterior cov (after update)
 
         self.y_prev = np.zeros((n_meas, 1))
@@ -184,3 +210,85 @@ class PerturbedPKF(SimpleKF):
         super().update(y, x_, P_)
         self.P += np.eye(len(self.P)) * self.lambda_
         return self.x, self.P
+
+
+def apply_kf(KF: SimpleKF, y: list[Vec]) -> tuple[list[Vec], list[Cov]]:
+    n = len(y) - 1
+    x: list[Vec] = [None] * (n + 1)  # type: ignore  # x^t_t
+    P: list[Cov] = [None] * (n + 1)  # type: ignore  # P^t_t
+    x[0], P[0] = KF.x, KF.P
+    for t in range(1, n + 1):
+        x[t], P[t] = KF.step(y[t])
+    return x, P
+
+
+def apply_kalman_interval_smoother(
+    KF: SimpleKF, x: list[Vec], P: list[Cov]
+) -> tuple[list[Vec], list[Cov], list[Mat]]:
+    n = len(x) - 1
+    x_n: list[Vec] = [None] * (n + 1)  # type: ignore  # x^n_t
+    P_n: list[Cov] = [None] * (n + 1)  # type: ignore  # P^n_t
+    x_n[n], P_n[n] = x[n], P[n]
+    J: list[Mat] = [None] * (n + 1)  # type: ignore
+    for t in range(n, 0, -1):
+        x_n[t - 1], P_n[t - 1], J[t - 1] = smoother_step(KF, x[t - 1], P[t - 1], x_n[t], P_n[t])
+
+    return x_n, P_n, J
+
+
+def smoother_step(KF: SimpleKF, x: Vec, P: Cov, x_n: Vec, P_n: Cov) -> tuple[Vec, Cov, Mat]:
+    """
+    Make one Kalman Smoother step
+
+    Parameters
+    ----------
+    x : Vec
+        State estimate after KF update step after the forward pass, i.e.
+        x^{t-1}_{t-1} in eq (6.47) in [1]
+    P : Cov
+        State covariance after KF update step after the forward pass, i.e.
+        P^{t-1}_{t-1} in eq. (6.48) in [1]
+    x_n : Vec
+        Smoothed state estimate for the time instaint following the one being
+        currently processed, i.e. x^{n}_{t} in eq. (6.47) in [1]
+    P_n : Cov
+        Smoothed state covariance for the time instant following the one being
+        currently processed, i.e. P^{n}_{t} in eq. (6.47) in [1]
+
+    Returns
+    -------
+    x_n : Vec
+        Smoothed state estimate for one timestep back, i.e. x^{n}_{t-1} in eq.
+        (6.47) in [1]
+    P_n : Cov
+        Smoothed state covariance for one timestep back, i.e. P^{n}_{t-1} in eq. (6.48) in [1]
+    J : Mat
+        J_{t-1} in eq. (6.49) in [1]
+
+    Notes
+    -----
+    Code here follows slightly different notation than in em_step(); e.g. here
+    x_n is a state vector for a single time instant compared to an array of
+    state vectors in em_step().
+
+    References
+    ----------
+    [1] .. Shumway, Robert H., and David S. Stoffer. 2011. Time Series Analysis
+    and Its Applications. Springer Texts in Statistics. New York, NY: Springer
+    New York. https://doi.org/10.1007/978-1-4419-7865-3.
+
+    """
+    x_, P_ = KF.predict(x, P)
+
+    J = np.linalg.solve(P_, KF.Phi @ P).T  # P * Phi^T * P_^{-1}; solve is better than inv
+
+    x_n = x + J @ (x_n - x_)
+    P_n = P + J @ (P_n - P_) @ J.T
+
+    return x_n, P_n, J
+
+
+if __name__ == "__main__":
+    import doctest
+
+    doctest.testmod()

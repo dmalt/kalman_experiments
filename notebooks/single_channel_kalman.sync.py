@@ -51,7 +51,11 @@ ALPHA = 1
 SIM_NOISE_SIGMA_GT = 1  # std of white noise driving the ar model for the colored noise
 
 noise_model = ArNoiseModel(
-    x0=np.random.rand(NOISE_AR_ORDER), alpha=ALPHA, order=NOISE_AR_ORDER, s=SIM_NOISE_SIGMA_GT
+    x0=np.random.rand(NOISE_AR_ORDER),
+    alpha=ALPHA,
+    order=NOISE_AR_ORDER,
+    sigma=SIM_NOISE_SIGMA_GT,
+    sr=mp.sr,
 )
 noise_sim = collect(noise_model, N_SAMP)
 meas = np.real(gt_states)  # + noise_sim

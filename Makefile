@@ -1,5 +1,5 @@
 fast: pytest_fast mypy flake
-all: coverage flake mypy scripts
+all: coverage flake mypy doctest scripts
 flake:
 	flake8 --max-line-length 99 --ignore E203
 mypy:
@@ -13,6 +13,8 @@ doctests_coverage:
 	coverage report
 pytest_fast:
 	pytest -m "not slow"
+doctest:
+	python src/kalman_experiments/kalman/core.py
 scripts:
 	python ./notebooks/mk_psd_study.sync.py
 	python ./notebooks/sspe.sync.py

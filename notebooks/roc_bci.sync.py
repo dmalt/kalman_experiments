@@ -21,8 +21,13 @@ import scipy.signal as sg
 from sklearn.metrics import roc_auc_score, roc_curve
 
 from kalman_experiments.kalman.wrappers import PerturbedP1DMatsudaKF, apply_kf
-from kalman_experiments.model_selection import estimate_sigmas, get_psd_val_from_est, theor_psd_ar
-from kalman_experiments.models import MatsudaParams, SingleRhythmModel, gen_ar_noise_coefficients
+from kalman_experiments.model_selection import estimate_sigmas, get_psd_val_from_est
+from kalman_experiments.models import (
+    ArNoiseModel,
+    MatsudaParams,
+    SingleRhythmModel,
+    gen_ar_noise_coefficients,
+)
 
 # %%
 data = np.load("/home/altukhov/Code/python/cfir-kalman/data/eegbci2_ICA_real_feet_fist.npz")
@@ -71,8 +76,14 @@ def fit_parameters(
     freqs, psd = sg.welch(train_data, fs=mp_init.sr, nperseg=nperseg)
     est_psd_func = partial(get_psd_val_from_est, freqs=freqs, psd=psd / 2)
     psi = gen_ar_noise_coefficients(noise_alpha, noise_order)
-    ar_psd_func = partial(theor_psd_ar, ar_coef=psi, sr=SRATE, s=1)
 
+    ar_psd_func = ArNoiseModel(
+        np.random.randn(noise_order),
+        sr=mp_init.sr,
+        order=noise_order,
+        alpha=noise_alpha,
+        sigma=1,
+    ).psd_onesided
     mar_psd_func = SingleRhythmModel(mp_init, sigma=1).psd_onesided
 
     q_s_2, r_s_2 = estimate_sigmas([mar_psd_func, ar_psd_func], est_psd_func, fit_freqs)
